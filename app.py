@@ -47,6 +47,46 @@ if os.path.exists(LOGO_PATH):
 )
 
 # -------------------------------------------------
+# SIDEBAR NAVIGATION
+# -------------------------------------------------
+
+with st.sidebar:
+    st.markdown("### 🏢 Pages")
+    st.markdown("---")
+    
+    # Multi-page navigation
+    st.page_link("app.py", label="📋 Main Requirement Form", icon="📋")
+    st.page_link("pages/1_Feasibility_Requirement.py", label="📊 Feasibility Assessment", icon="📊")
+    st.page_link("pages/2_Decision_Mind_Map.py", label="🧠 Decision Mind Map", icon="🧠")
+    
+    st.markdown("---")
+    st.markdown("### Quick Actions")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📥 Clear Form", use_container_width=True):
+            st.session_state.clear()
+            st.rerun()
+    
+    with col2:
+        if st.button("💾 Save Draft", use_container_width=True):
+            st.info("Draft saved locally", icon="✓")
+    
+    st.markdown("---")
+    st.markdown("### Help & Info")
+    with st.expander("📚 How to use this form?"):
+        st.markdown("""
+        1. **Fill Client Information** - Start with basic details
+        2. **Select Modules** - Choose which modules you need
+        3. **Configure Each Module** - Set up specific requirements
+        4. **Review Summary** - Check the live summary section
+        5. **Download PDF** - Export your requirement as PDF
+        """)
+    
+    st.markdown("---")
+    st.caption("Version 1.0 | Last Updated: Feb 2026")
+
+# -------------------------------------------------
 # UTILITIES
 # -------------------------------------------------
 
@@ -173,7 +213,7 @@ def domain_selector(label, key_prefix):
 def generate_pdf(data):
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image #type: ignore
     from reportlab.lib.styles import ParagraphStyle #type: ignore
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_WRAP #type: ignore
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
     from reportlab.lib.colors import HexColor #type: ignore
     
     buffer = BytesIO()
@@ -209,7 +249,7 @@ def generate_pdf(data):
         parent=styles['Normal'],
         wordWrap='CJK',
         fontSize=9,
-        alignment=TA_WRAP
+        alignment=TA_JUSTIFY
     )
 
     # Add logo if it exists
@@ -234,12 +274,14 @@ def generate_pdf(data):
         elements.append(Spacer(1, 0.08 * inch))
 
         table_data = []
+        from reportlab.platypus import Paragraph
+
         for k, v in content.items():
-            # Wrap long values
-            value_str = str(v) if str(v) else "-"
-            if len(value_str) > 120:
-                value_str = value_str[:120] + "..."
-            table_data.append([k, value_str])
+            value_str = str(v) if v else "-"
+            table_data.append([
+                Paragraph(k, wrapped_style), 
+                Paragraph(value_str, wrapped_style)
+            ])
 
         if table_data:
             table = Table(table_data, colWidths=[1.7 * inch, 4.3 * inch])
