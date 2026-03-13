@@ -1,120 +1,290 @@
 import streamlit as st
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle #type: ignore
-from reportlab.lib import colors #type: ignore
-from reportlab.lib.styles import getSampleStyleSheet #type: ignore
-from reportlab.lib import pagesizes #type: ignore
-from reportlab.lib.units import inch #type: ignore
+import streamlit.components.v1 as components
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle  # type: ignore
+from reportlab.lib import colors  # type: ignore
+from reportlab.lib.styles import getSampleStyleSheet  # type: ignore
+from reportlab.lib import pagesizes  # type: ignore
+from reportlab.lib.units import inch  # type: ignore
+from docx import Document
 from io import BytesIO
+from datetime import date
 import os
 import base64
 
-# -------------------------------------------------
-# CONFIG
-# -------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="42Signals | Requirement Handling",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 LOGO_PATH = "42slogo.png"
 
-# -------------------------------------------------
-# CENTERED SIDE-BY-SIDE HEADER
-# -------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL CSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+st.markdown("""
+<style>
+/* ── Streamlit chrome ── */
+#MainMenu { visibility: hidden; }
+footer     { visibility: hidden; }
+header     { visibility: hidden; }
+
+/* ── App background ── */
+.stApp { background-color: #f5f6f8; }
+
+/* ── Sidebar light theme ── */
+section[data-testid="stSidebar"] {
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+}
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] .element-container p,
+section[data-testid="stSidebar"] small,
+section[data-testid="stSidebar"] .stCaption {
+    color: #6b7280 !important;
+}
+section[data-testid="stSidebar"] hr {
+    border-color: #e5e7eb !important;
+    margin: 10px 0 !important;
+}
+
+/* ── Sidebar nav buttons ── */
+section[data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #6b7280 !important;
+    text-align: left;
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    transition: all 0.15s;
+    box-shadow: none !important;
+    width: 100%;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: #f3f4f6 !important;
+    border-color: #e5e7eb !important;
+    color: #1f2937 !important;
+}
+section[data-testid="stSidebar"] .stButton > button:focus {
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* ── Sidebar expander ── */
+section[data-testid="stSidebar"] details summary p {
+    color: #374151 !important;
+    font-weight: 600 !important;
+}
+
+/* ── Text inputs ── */
+.stTextInput > div > div > input,
+.stTextArea > div > textarea,
+.stNumberInput > div > div > input {
+    border-radius: 7px !important;
+    border: 1.5px solid #e0e0e0 !important;
+    background: white !important;
+    font-size: 0.88rem !important;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > textarea:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: #6b7280 !important;
+    box-shadow: 0 0 0 3px rgba(107,114,128,0.15) !important;
+}
+
+/* ── Selectbox ── */
+.stSelectbox > div > div {
+    border-radius: 7px !important;
+    border: 1.5px solid #e0e0e0 !important;
+    background: white !important;
+    font-size: 0.88rem !important;
+}
+
+/* ── Multiselect ── */
+.stMultiSelect > div > div {
+    border-radius: 7px !important;
+    border: 1.5px solid #e0e0e0 !important;
+    background: white !important;
+}
+
+/* ── Primary button (Generate PDF) ── */
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
+    background: #1f2937 !important;
+    color: white !important;
+    border: none !important;
+    padding: 11px 32px !important;
+    border-radius: 8px !important;
+    font-size: 0.93rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+    transition: all 0.2s !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover {
+    background: #374151 !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ── Download button ── */
+.stDownloadButton > button {
+    background: #1f2937 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.93rem !important;
+    padding: 11px 0 !important;
+    width: 100% !important;
+    transition: all 0.2s !important;
+}
+.stDownloadButton > button:hover {
+    background: #374151 !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+}
+
+/* ── Expander (main area) ── */
+details > summary > div > p {
+    font-weight: 600 !important;
+    color: #1f2937 !important;
+}
+details {
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    background: white !important;
+    margin-bottom: 8px !important;
+}
+
+/* ── Radio ── */
+.stRadio > div { gap: 6px !important; }
+
+/* ── Date input ── */
+.stDateInput > div > div > input {
+    border-radius: 7px !important;
+    border: 1.5px solid #e0e0e0 !important;
+    font-size: 0.88rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SESSION STATE
+# ─────────────────────────────────────────────────────────────────────────────
+
+if "page" not in st.session_state:
+    st.session_state["page"] = "main"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_base64_image(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-if os.path.exists(LOGO_PATH):
-    img_base64 = get_base64_image(LOGO_PATH)
-    
-    st.markdown(
-    f"""
+
+def celebrate(message="Done!", sub=""):
+    """Balloons + confetti burst + animated success banner."""
+    st.balloons()
+    components.html("""
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <script>
+    (function(){
+        var end = Date.now() + 2200;
+        var colors = ['#1f2937','#374151','#6b7280','#9ca3af','#d1d5db'];
+        (function frame(){
+            confetti({ particleCount:6, angle:60,  spread:55, origin:{x:0}, colors:colors });
+            confetti({ particleCount:6, angle:120, spread:55, origin:{x:1}, colors:colors });
+            if (Date.now() < end) requestAnimationFrame(frame);
+        }());
+    })();
+    </script>
+    """, height=0)
+    st.markdown(f"""
+    <style>
+    @keyframes slideDown {{
+        from {{ opacity: 0; transform: translateY(-18px); }}
+        to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    </style>
     <div style="
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        width: 100%; 
-        gap: 17px;
+        animation: slideDown 0.45s ease forwards;
+        background: linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);
+        border: 1px solid #86efac;
+        border-left: 5px solid #16a34a;
+        border-radius: 10px;
+        padding: 14px 20px;
+        margin: 12px 0 8px 0;
+        display: flex; align-items: center; gap: 12px;
     ">
-        <img src="data:image/png;base64,{img_base64}" 
-             style="height: 3.5em; width: auto; object-fit: contain;">
-        <h1 style="margin: 0; font-size: 2.5em; line-height: 1;">
-            Requirement Handling Form
-        </h1>
+        <div style="font-size:1.6rem;">✅</div>
+        <div>
+            <div style="font-weight:700;color:#15803d;font-size:0.95rem;">{message}</div>
+            {"" if not sub else f'<div style="color:#166534;font-size:0.8rem;margin-top:3px;">{sub}</div>'}
+        </div>
     </div>
-    """,
-    unsafe_allow_html=True
-)
+    """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# SIDEBAR NAVIGATION
-# -------------------------------------------------
 
-with st.sidebar:
-    st.markdown("### 🏢 Pages")
-    st.markdown("---")
-    
-    # Multi-page navigation
-    st.page_link("app.py", label="📋 Main Requirement Form", icon="📋")
-    st.page_link("pages/1_Feasibility_Requirement.py", label="📊 Feasibility Assessment", icon="📊")
-    st.page_link("pages/2_Decision_Mind_Map.py", label="🧠 Decision Mind Map", icon="🧠")
-    
-    st.markdown("---")
-    st.markdown("### Quick Actions")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📥 Clear Form", use_container_width=True):
-            st.session_state.clear()
-            st.rerun()
-    
-    with col2:
-        if st.button("💾 Save Draft", use_container_width=True):
-            st.info("Draft saved locally", icon="✓")
-    
-    st.markdown("---")
-    st.markdown("### Help & Info")
-    with st.expander("📚 How to use this form?"):
-        st.markdown("""
-        1. **Fill Client Information** - Start with basic details
-        2. **Select Modules** - Choose which modules you need
-        3. **Configure Each Module** - Set up specific requirements
-        4. **Review Summary** - Check the live summary section
-        5. **Download PDF** - Export your requirement as PDF
-        """)
-    
-    st.markdown("---")
-    st.caption("Version 1.0 | Last Updated: Feb 2026")
+def section_header(icon, title):
+    """Styled section header bar used inside form pages."""
+    st.markdown(f"""
+    <div style="
+        background: #f9fafb;
+        border-left: 4px solid #374151;
+        border-radius: 0 6px 6px 0;
+        color: #1f2937;
+        padding: 9px 16px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin: 28px 0 14px 0;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    ">{icon}&ensp;{title}</div>
+    """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# UTILITIES
-# -------------------------------------------------
+
+def page_title(title, subtitle=""):
+    st.markdown(f"""
+    <div style="padding: 8px 0 16px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px;">
+        <div style="font-size: 1.5rem; font-weight: 700; color: #111827; line-height: 1.2;">{title}</div>
+        {"" if not subtitle else f'<div style="font-size:0.85rem;color:#6b7280;margin-top:5px;">{subtitle}</div>'}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def info_row(label, value):
+    st.markdown(f"""
+    <div style="padding: 6px 8px 5px 8px; border-bottom: 1px solid #f3f4f6; border-radius: 4px;">
+        <div style="color:#9ca3af; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">{label}</div>
+        <div style="color:#1f2937; font-size:0.875rem; font-weight:500; margin-top:2px;">{value}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 def frequency_selector(label, key_prefix):
-    st.markdown(f"**{label} Frequency Configuration**")
-
-    freq = st.selectbox(
-        f"{label} - Frequency",
-        ["Daily", "Hourly"],
-        key=f"{key_prefix}_freq"
-    )
-
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        freq = st.selectbox(f"{label} — Frequency", ["Daily", "Hourly"], key=f"{key_prefix}_freq")
     hourly_count = None
     if freq == "Hourly":
-        hourly_count = st.number_input(
-            f"{label} - How many times per day?",
-            min_value=1,
-            key=f"{key_prefix}_hourly"
-        )
-
+        with col2:
+            hourly_count = st.number_input("Times / day", min_value=1, key=f"{key_prefix}_hourly")
     return freq, hourly_count
 
 
 def calculate_risk(freq_string, volume_string):
     if not freq_string or not volume_string:
         return None
-
-    # Frequency severity
     freq_score = 1
     if "Hourly" in freq_string:
         try:
@@ -122,728 +292,1475 @@ def calculate_risk(freq_string, volume_string):
             freq_score = 3 if times > 6 else 2
         except:
             freq_score = 2
-
-    # Volume severity
     vol_score = 1
     try:
         volume = int(str(volume_string).replace(",", ""))
-        if volume <= 10000:
-            vol_score = 1
-        elif volume <= 50000:
-            vol_score = 2
-        else:
-            vol_score = 3
+        vol_score = 1 if volume <= 10_000 else (2 if volume <= 50_000 else 3)
     except:
-        vol_score = 1
-
+        pass
     total = freq_score + vol_score
-
-    if total <= 2:
-        return "LOW"
-    elif total <= 4:
-        return "MODERATE"
-    else:
-        return "CRITICAL"
-
-
-def render_summary(data):
-    st.markdown("---")
-    st.markdown("## Live Requirement Summary")
- 
-
-    for section, content in data.items():
-        with st.expander(section, expanded=True):
-            for k, v in content.items():
-                if v not in ["", None, [], {}]:
-                    st.markdown(f"**{k}**: {v}")
-
-    # Risk detection for Products + Trends
-    if "Products + Trends" in data:
-        pt = data["Products + Trends"]
-        risk = calculate_risk(
-            pt.get("Overall Frequency"),
-            pt.get("Expected Volume")
-        )
-
-        if risk:
-            st.markdown("---")
-            st.markdown("## Crawl Load Risk Assessment")
-
-            if risk == "LOW":
-                st.success("LOW RISK – Infrastructure load is safe.")
-            elif risk == "MODERATE":
-                st.warning("MODERATE RISK – Monitor scaling & proxy usage.")
-            else:
-                st.error("CRITICAL RISK – High probability of infra saturation.")
-
-
-def validate_required(client_name):
-    if not client_name:
-        st.error("Client Name is required.")
-        st.stop()
+    return "LOW" if total <= 2 else ("MODERATE" if total <= 4 else "CRITICAL")
 
 
 PREDEFINED_DOMAINS = ["swiggy.com", "blinkit.com", "zepto.com", "amazon.in", "flipkart.in"]
 
 def domain_selector(label, key_prefix):
-    """Multi-select for domains with custom option"""
+    st.markdown(f"**{label}**")
     col1, col2 = st.columns([3, 1])
-    
     with col1:
-        selected = st.multiselect(
-            label,
-            PREDEFINED_DOMAINS,
-            key=f"{key_prefix}_domains"
-        )
-    
+        selected = st.multiselect(label, PREDEFINED_DOMAINS, key=f"{key_prefix}_domains", label_visibility="collapsed")
     with col2:
-        custom = st.text_input(
-            "+ Custom",
-            placeholder="Add custom domain",
-            key=f"{key_prefix}_custom_domain"
-        )
-    
-    all_domains = selected.copy()
-    if custom.strip():
-        all_domains.append(custom.strip())
-    
-    return ", ".join(all_domains) if all_domains else ""
+        custom = st.text_input("Custom", placeholder="+ Add domain", key=f"{key_prefix}_custom_domain", label_visibility="collapsed")
+    domains = selected + ([custom.strip()] if custom.strip() else [])
+    return ", ".join(domains) if domains else ""
 
 
-def generate_pdf(data):
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image #type: ignore
-    from reportlab.lib.styles import ParagraphStyle #type: ignore
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-    from reportlab.lib.colors import HexColor #type: ignore
-    
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=pagesizes.A4, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Custom styles for colorful PDF
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=HexColor('#1a237e'),
-        spaceAfter=12,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
-    
-    section_style = ParagraphStyle(
-        'SectionHeader',
-        parent=styles['Heading2'],
-        fontSize=12,
-        textColor=HexColor('#ffffff'),
-        backColor=HexColor('#1a237e'),
-        spaceAfter=8,
-        spaceBefore=8,
-        leftIndent=6,
-        fontName='Helvetica-Bold'
-    )
-    
-    wrapped_style = ParagraphStyle(
-        'Wrapped',
-        parent=styles['Normal'],
-        wordWrap='CJK',
-        fontSize=9,
-        alignment=TA_JUSTIFY
+def validate_required(client_name):
+    if not client_name:
+        st.markdown("""
+        <div style="
+            background:#fffbeb; border:1px solid #f59e0b; border-radius:8px;
+            padding:12px 16px; color:#92400e; font-size:0.875rem; margin:4px 0 20px 0;
+        ">⚠️  Please enter a <strong>Client Name</strong> above to unlock the full form.</div>
+        """, unsafe_allow_html=True)
+        st.stop()
+
+
+def render_summary(data):
+    st.markdown("""
+    <div style="
+        background: #f9fafb;
+        border-left: 4px solid #374151;
+        border-radius: 0 6px 6px 0;
+        padding: 10px 16px;
+        margin-bottom: 16px;
+    ">
+        <div style="font-size: 0.9rem; font-weight: 700; color: #1f2937; letter-spacing: 0.02em;">📋 Live Summary</div>
+        <div style="font-size: 0.73rem; color: #6b7280; margin-top: 2px;">Auto-updates as you fill the form</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    has_content = any(
+        any(v not in ["", None, [], {}] for v in c.values())
+        for c in data.values()
     )
 
-    # Add logo if it exists
-    try:
-        if os.path.exists(LOGO_PATH):
-            logo = Image(LOGO_PATH, width=1*inch, height=0.8*inch)
-            elements.append(logo)
-            elements.append(Spacer(1, 0.1 * inch))
-    except:
-        pass
-    
-    # Add title
-    elements.append(Paragraph("<b>Requirement Handling Form</b>", title_style))
-    elements.append(Spacer(1, 0.2 * inch))
-
-    color_index = 0
-    colors_list = [HexColor('#f5f5f5'), HexColor('#eeeeee')]
+    if not has_content:
+        st.markdown("""
+        <div style="
+            text-align:center; color:#9ca3af; padding:40px 16px;
+            background:white; border-radius:10px; border:2px dashed #e5e7eb;
+        ">
+            <div style="font-size:2.2rem; margin-bottom:10px;">📝</div>
+            <div style="font-size:0.83rem; line-height:1.5;">
+                Start filling the form<br>to preview a summary here
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
 
     for section, content in data.items():
-        # Section header with background color
-        elements.append(Paragraph(f"{section}", section_style))
-        elements.append(Spacer(1, 0.08 * inch))
+        filled = {k: v for k, v in content.items() if v not in ["", None, [], {}]}
+        if not filled:
+            continue
+        with st.expander(f"**{section}**", expanded=True):
+            for k, v in filled.items():
+                info_row(k, v)
 
-        table_data = []
-        from reportlab.platypus import Paragraph
+    if "Products + Trends" in data:
+        pt = data["Products + Trends"]
+        risk = calculate_risk(pt.get("Overall Frequency"), pt.get("Expected Volume"))
+        if risk:
+            st.markdown("---")
+            st.markdown("**⚡ Crawl Load Risk**")
+            if risk == "LOW":
+                st.success("**LOW** — Infrastructure load is safe.")
+            elif risk == "MODERATE":
+                st.warning("**MODERATE** — Monitor scaling & proxy usage.")
+            else:
+                st.error("**CRITICAL** — High infra saturation risk.")
 
-        for k, v in content.items():
-            value_str = str(v) if v else "-"
-            table_data.append([
-                Paragraph(k, wrapped_style), 
-                Paragraph(value_str, wrapped_style)
-            ])
 
-        if table_data:
-            table = Table(table_data, colWidths=[1.7 * inch, 4.3 * inch])
-            table.setStyle(TableStyle([
-                ("GRID", (0, 0), (-1, -1), 0.5, HexColor('#cccccc')),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("BACKGROUND", (0, 0), (-1, -1), colors_list[color_index % 2]),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+def generate_pdf(data, client_name):
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image  # type: ignore
+    from reportlab.lib.styles import ParagraphStyle  # type: ignore
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from reportlab.lib.colors import HexColor  # type: ignore
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=pagesizes.A4,
+        topMargin=0.5*inch, bottomMargin=0.6*inch,
+        leftMargin=0.6*inch, rightMargin=0.6*inch,
+    )
+    styles = getSampleStyleSheet()
+    el = []
+
+    title_s = ParagraphStyle("T", parent=styles["Heading1"], fontSize=20, textColor=HexColor("#1f2937"),
+                              alignment=TA_CENTER, fontName="Helvetica-Bold", spaceAfter=3)
+    sub_s   = ParagraphStyle("S", parent=styles["Normal"], fontSize=9, textColor=HexColor("#6b7280"),
+                              alignment=TA_CENTER, spaceAfter=16)
+    sec_s   = ParagraphStyle("H", parent=styles["Heading2"], fontSize=10.5, textColor=HexColor("#1f2937"),
+                              backColor=HexColor("#f3f4f6"), leftIndent=8, fontName="Helvetica-Bold",
+                              spaceBefore=6, spaceAfter=4)
+    key_s   = ParagraphStyle("K", parent=styles["Normal"], fontSize=8, textColor=HexColor("#6b7280"),
+                              fontName="Helvetica-Bold")
+    val_s   = ParagraphStyle("V", parent=styles["Normal"], fontSize=9, textColor=HexColor("#111827"),
+                              wordWrap="CJK", alignment=TA_JUSTIFY)
+
+    try:
+        if os.path.exists(LOGO_PATH):
+            logo = Image(LOGO_PATH, width=0.9*inch, height=0.72*inch)
+            hdr = Table([[logo, Paragraph("<b>Requirement Handling Form</b>", title_s)]],
+                        colWidths=[1.1*inch, 5.9*inch])
+            hdr.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ]))
+            el.append(hdr)
+        else:
+            el.append(Paragraph("<b>Requirement Handling Form</b>", title_s))
+    except:
+        el.append(Paragraph("<b>Requirement Handling Form</b>", title_s))
 
-            elements.append(table)
-            elements.append(Spacer(1, 0.15 * inch))
-            color_index += 1
+    el.append(Paragraph(
+        f"Client: {client_name} &nbsp;|&nbsp; Generated: {date.today().strftime('%d %b %Y')}",
+        sub_s
+    ))
+    el.append(Spacer(1, 0.1*inch))
 
-    doc.build(elements)
+    row_colors = [HexColor("#f9fafb"), HexColor("#ffffff")]
+    ci = 0
+    for section, content in data.items():
+        el.append(Paragraph(f"  {section}", sec_s))
+        el.append(Spacer(1, 0.04*inch))
+        rows = [
+            [Paragraph(k, key_s), Paragraph(str(v) if v else "—", val_s)]
+            for k, v in content.items()
+        ]
+        if rows:
+            t = Table(rows, colWidths=[1.9*inch, 4.1*inch])
+            t.setStyle(TableStyle([
+                ("GRID",         (0, 0), (-1, -1), 0.4, HexColor("#e5e7eb")),
+                ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND",   (0, 0), (-1, -1), row_colors[ci % 2]),
+                ("BACKGROUND",   (0, 0), (0, -1),  HexColor("#f3f4f6")),
+                ("TOPPADDING",   (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 7),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ]))
+            el.append(t)
+            el.append(Spacer(1, 0.14*inch))
+            ci += 1
+
+    doc.build(el)
     buffer.seek(0)
     return buffer
 
 
-# -------------------------------------------------
-# LAYOUT
-# -------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────────────────────────────────────
 
-left, right = st.columns([2, 1])
-form_data = {}
+with st.sidebar:
 
-# -------------------------------------------------
-# LEFT PANEL (FORM)
-# -------------------------------------------------
-
-with left:
+    # Brand header
+    if os.path.exists(LOGO_PATH):
+        img_b64 = get_base64_image(LOGO_PATH)
+        st.markdown(f"""
+        <div style="text-align:center; padding:24px 0 18px 0;">
+            <img src="data:image/png;base64,{img_b64}"
+                 style="height:56px; width:auto; margin-bottom:10px;">
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="text-align:center; padding:24px 0 18px 0;">
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # 1. CLIENT INFORMATION
-    st.header("1. Client Information")
+    # Section label
+    st.markdown('<div style="color:#9ca3af;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.12em;padding:0 4px 8px 4px;">Navigation</div>', unsafe_allow_html=True)
 
-    client_name = st.text_input("Client Name *", placeholder="Enter client name")
-    
-    priority = st.radio(
-        "Priority Level",
-        ["High", "Medium", "Low"],
-        horizontal=True
-    )
-    
-    completion_date = st.date_input("Expected Project Completion Date")
-    expected_market = st.text_input(
-        "Target Market / Geography",
-        placeholder="e.g., India, US, Southeast Asia"
-    )
-
-    form_data["Client Information"] = {
-        "Client Name": client_name,
-        "Priority Level": priority,
-        "Expected Completion Date": str(completion_date),
-        "Target Market": expected_market
+    # Nav items
+    pages = {
+        "main":        ("📋", "New Requirement Form"),
+        "feasibility": ("📊", "Feasibility Assessment"),
+        "req_flow":    ("🔀", "New Requirement Flow"),
+        "ops_map":     ("🗺️", "Day-to-Day Ops Map"),
+        "poc_guide":   ("👤", "Task POC Guide"),
     }
 
-    validate_required(client_name)
-
-    st.markdown("---")
-
-    # 2. MODULES TO CRAWL
-    st.header("2. Modules to Crawl")
-    st.markdown("Select required modules:")
-
-    modules = st.multiselect(
-        "Modules",
-        [
-            "Products + Trends",
-            "SOS (Search on Site)",
-            "Reviews",
-            "Price Violation",
-            "Store ID Crawls",
-            "Festive Sale Crawls"
-        ],
-        label_visibility="collapsed"
-    )
-
-    form_data["Modules Selected"] = {
-        "Selected Modules": ", ".join(modules) if modules else "None"
-    }
-
-    st.markdown("---")
-
-    # 3. PRODUCTS + TRENDS MODULE
-    if "Products + Trends" in modules:
-        st.header("3. PRODUCTS + TRENDS MODULE")
-
-        pt = {}
-
-        # Step 1: Crawl Type
-        st.subheader("Step 1: Crawl Type")
-        crawl_type = st.radio(
-            "Select crawl type",
-            ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
-            label_visibility="collapsed"
-        )
-        pt["Crawl Type"] = crawl_type
-
-        # Step 2: Domains
-        st.markdown("---")
-        st.subheader("Step 2: Domains")
-        pt["Domains"] = domain_selector("Select Domains", "pt")
-
-        freq, hourly = frequency_selector("Overall Crawl", "pt_overall")
-        pt["Overall Frequency"] = (
-            f"{freq} ({hourly} times/day)" if hourly else freq
-        )
-
-        if crawl_type == "Category-based (Category_ES)":
-            st.markdown("---")
-            st.subheader("A) Category_ES Based Crawl Configuration")
-
-            # Index Frequency
-            st.markdown("**Index Frequency**")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                prod_freq, prod_hourly = frequency_selector("Products Index", "pt_prod")
-                pt["Products Index Frequency"] = (
-                    f"{prod_freq} ({prod_hourly} times/day)" if prod_hourly else prod_freq
-                )
-            
-            with col2:
-                trend_freq, trend_hourly = frequency_selector("Trends Index", "pt_trend")
-                pt["Trends Index Frequency"] = (
-                    f"{trend_freq} ({trend_hourly} times/day)" if trend_hourly else trend_freq
-                )
-
-            if prod_hourly or trend_hourly:
-                pt["Hourly Crawl Timings"] = st.text_input(
-                    "Specify crawl hours (avoid off-hours overload)",
-                    placeholder="Example: 9 AM, 12 PM, 3 PM, 6 PM"
-                )
-
-            # Trends Configuration
-            st.markdown("**Trends Configuration**")
-            pt["No of RSS Crawls"] = st.number_input(
-                "Number of RSS crawls to push into Trends",
-                min_value=0
-            )
-            pt["Expected Data Push Volume"] = st.text_input(
-                "How much of products crawl needed to be pushed into trends?",
-            )
-
-            # Category Details
-            st.markdown("**Category Details**")
-            pt["Sample Category List"] = st.text_area(
-                "Sample Category List (comma-separated)",
-                placeholder="e.g., Electronics, Fashion, Home & Kitchen"
-            )
-            
-            category_status = st.radio(
-                "Is final client category list available?",
-                ["Yes", "No"],
-                key="pt_category_status"
-            )
-            if category_status == "Yes":
-                pt["Client Category Sheet Link"] = st.text_input(
-                    "Attach Sheet Link"
-                )
-            else:
-                pt["Client Category Expected Date"] = st.date_input(
-                    "Expected Date for category list"
-                )
-
-        else:  # Input Based
-            st.markdown("---")
-            st.subheader("B) Input-Based Crawl Configuration")
-
-            # Products Crawl
-            st.markdown("**Products Crawl**")
-            need_product = st.radio(
-                "Is products crawl required?",
-                ["Yes", "No"],
-                key="pt_input_products_needed"
-            )
-            pt["Products Crawl Needed"] = need_product
-
-            if need_product == "Yes":
-                p_freq, p_hourly = frequency_selector("Products Crawl", "pt_input_prod")
-                pt["Products Crawl Frequency"] = (
-                    f"{p_freq} ({p_hourly} times/day)" if p_hourly else p_freq
-                )
-
-            # Trends Crawl
-            st.markdown("**Trends Crawl Frequency**")
-            t_freq, t_hourly = frequency_selector("Trends Crawl", "pt_input_trend")
-            pt["Trends Crawl Frequency"] = (
-                f"{t_freq} ({t_hourly} times/day)" if t_hourly else t_freq
-            )
-
-            if t_hourly:
-                pt["Trends Hourly Timings"] = st.text_input(
-                    "Specify crawl times if hourly",
-                    placeholder="Example: 10 AM, 2 PM, 6 PM, 10 PM"
-                )
-
-            # Inputs
-            st.markdown("**Inputs**")
-            pt["Sample Input URLs"] = st.text_area(
-                "Sample Input URLs",
-                placeholder="If client inputs not available, provide testing URLs"
-            )
-            
-            inputs_status = st.radio(
-                "Client Inputs Status",
-                ["Not Yet Provided", "Available - See Link Below"],
-                key="pt_inputs_status"
-            )
-            if inputs_status == "Not Yet Provided":
-                pt["Client Inputs Expected Date"] = st.date_input(
-                    "Expected delivery date for inputs"
-                )
-            else:
-                pt["Client Inputs Sheet Link"] = st.text_input(
-                    "Attach Sheet Link with client inputs"
-                )
-
-            # Location Dependency
-            st.markdown("**Location Dependency**")
-            is_pincode_based = st.radio(
-                "Is crawl Pincode/Zipcode based?",
-                ["Yes", "No"],
-                key="pt_pincode_based"
-            )
-            pt["Pincode Based"] = is_pincode_based
-            if is_pincode_based == "Yes":
-                pt["Sample Pincode"] = st.text_input(
-                    "Sample Pincode",
-                    placeholder="e.g., 110001, 560001"
-                )
-                pt["Client Pincode List Link"] = st.text_input(
-                    "Client provided pincode list link (if available)"
-                )
-
-            # Volume & Output
-            st.markdown("**Volume & Output**")
-            pt["Expected Volume"] = st.text_input(
-                "Expected Volume (Products / Pages per day)",
-                placeholder="e.g., 1000 products/day"
-            )
-            
-            pt["Screenshot Required"] = st.radio(
-                "Is Screenshot Required?",
-                ["Yes", "No"],
-                key="pt_screenshot"
-            )
-
-        # Other Specific Fields
-        st.markdown("**Any Specific Fields to Capture?**")
-        pt["Specific Fields"] = st.text_area(
-            "Specify any additional fields",
-            placeholder="Example: seller name, discount %, stock status, rating breakdown, delivery time, search results ranking",
-            key="pt_specific_fields"
-        )
-
-        form_data["Products + Trends"] = pt
-
-        st.markdown("---")
-
-    # 4. SOS MODULE
-    if "SOS (Search on Site)" in modules:
-        st.header("4. SOS (Search On Site) MODULE")
-
-        sos = {}
-
-        # Keywords
-        st.markdown("**Keywords**")
-        sos["No. of Keywords"] = st.number_input(
-            "Number of Keywords",
-            min_value=0,
-            key="sos_keyword_count"
-        )
-        
-        keywords_source = st.radio(
-            "SOS Keywords List",
-            ["Client Provided", "Provide Sample for Testing"],
-            key="sos_keywords_source"
-        )
-        
-        if keywords_source == "Client Provided":
-            sos["SOS Keywords Sheet Link"] = st.text_input(
-                "Attach Link to client keywords"
-            )
+    for key, (icon, label) in pages.items():
+        if st.session_state["page"] == key:
+            # Active item — styled div, not a button
+            st.markdown(f"""
+            <div style="
+                background: #f3f4f6;
+                border: 1px solid #e5e7eb;
+                border-left: 3px solid #374151;
+                border-radius: 8px;
+                padding: 9px 14px;
+                color: #1f2937;
+                font-size: 0.875rem;
+                font-weight: 600;
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                cursor: default;
+            ">{icon}&ensp;{label}</div>
+            """, unsafe_allow_html=True)
         else:
-            sos["Sample Keywords"] = st.text_area(
-                "Provide sample keywords for testing",
-                placeholder="e.g., laptop, shoes, home appliances"
+            if st.button(f"{icon}\u2002{label}", key=f"nav_{key}", use_container_width=True):
+                st.session_state["page"] = key
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align:center; padding:4px 0 8px 0;">
+        <div style="color:#d1d5db; font-size:0.7rem;">v1.0 · 42Signals · 2026</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: New Requirement Form
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_main_form():
+    page_title(
+        "New Requirement Form",
+        "Capture complete client crawl requirements for project planning and scoping."
+    )
+
+    left, right = st.columns([2, 1], gap="large")
+    form_data = {}
+
+    with left:
+
+        # ── 1. Client Information ──────────────────────────────────────────
+        section_header("👤", "1. Client Information")
+
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            client_name = st.text_input("Client Name *", placeholder="e.g., Unilever India")
+        with c2:
+            priority = st.selectbox("Priority Level", ["High", "Medium", "Low"])
+
+        c3, c4 = st.columns(2)
+        with c3:
+            completion_date = st.date_input("Expected Completion Date")
+        with c4:
+            expected_market = st.text_input("Target Market / Geography", placeholder="e.g., India, Southeast Asia")
+
+        form_data["Client Information"] = {
+            "Client Name":            client_name,
+            "Priority Level":         priority,
+            "Expected Completion":    str(completion_date),
+            "Target Market":          expected_market,
+        }
+
+        validate_required(client_name)
+
+        # ── 2. Modules to Crawl ───────────────────────────────────────────
+        section_header("🧩", "2. Modules to Crawl")
+
+        modules = st.multiselect(
+            "Select the modules required for this client",
+            ["Products + Trends", "SOS (Search on Site)", "Reviews",
+             "Price Violation", "Store ID Crawls", "Festive Sale Crawls"],
+        )
+        form_data["Modules Selected"] = {
+            "Selected Modules": ", ".join(modules) if modules else "None"
+        }
+
+        # ── 3. Products + Trends ──────────────────────────────────────────
+        if "Products + Trends" in modules:
+            section_header("📦", "3. Products + Trends Module")
+            pt = {}
+
+            st.markdown("**Crawl Type**")
+            crawl_type = st.radio(
+                "crawl_type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
+                label_visibility="collapsed", horizontal=True
             )
+            pt["Crawl Type"] = crawl_type
+
+            st.markdown("**Domains**")
+            pt["Domains"] = domain_selector("Select Domains", "pt")
+
+            st.markdown("**Overall Crawl Frequency**")
+            freq, hourly = frequency_selector("Overall", "pt_overall")
+            pt["Overall Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+
+            if crawl_type == "Category-based (Category_ES)":
+                st.markdown("---")
+                st.markdown("##### A) Category_ES Configuration")
+
+                st.markdown("**Index Frequency**")
+                c1, c2 = st.columns(2)
+                with c1:
+                    pf, ph = frequency_selector("Products Index", "pt_prod")
+                    pt["Products Index Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+                with c2:
+                    tf, th = frequency_selector("Trends Index", "pt_trend")
+                    pt["Trends Index Frequency"] = f"{tf} ({th} times/day)" if th else tf
+
+                if ph or th:
+                    pt["Hourly Crawl Timings"] = st.text_input(
+                        "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM"
+                    )
+
+                st.markdown("**Trends Configuration**")
+                c1, c2 = st.columns(2)
+                with c1:
+                    pt["No of RSS Crawls"] = st.number_input("Number of RSS crawls into Trends", min_value=0)
+                with c2:
+                    pt["Expected Data Push Volume"] = st.text_input("Products volume to push into Trends")
+
+                st.markdown("**Category Details**")
+                pt["Sample Category List"] = st.text_area(
+                    "Sample Category List", placeholder="e.g., Electronics, Fashion, Home & Kitchen"
+                )
+                cat_status = st.radio("Is final category list available?", ["Yes", "No"], key="pt_category_status", horizontal=True)
+                if cat_status == "Yes":
+                    pt["Client Category Sheet Link"] = st.text_input("Category Sheet Link")
+                else:
+                    pt["Client Category Expected Date"] = str(st.date_input("Expected date for category list"))
+
+            else:
+                st.markdown("---")
+                st.markdown("##### B) Input-Based Configuration")
+
+                st.markdown("**Products Crawl**")
+                need_product = st.radio("Products crawl required?", ["Yes", "No"], key="pt_input_products_needed", horizontal=True)
+                pt["Products Crawl Needed"] = need_product
+                if need_product == "Yes":
+                    pf, ph = frequency_selector("Products Crawl", "pt_input_prod")
+                    pt["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+
+                st.markdown("**Trends Crawl**")
+                tf, th = frequency_selector("Trends Crawl", "pt_input_trend")
+                pt["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else tf
+                if th:
+                    pt["Trends Hourly Timings"] = st.text_input(
+                        "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM"
+                    )
+
+                st.markdown("**Inputs**")
+                pt["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs")
+                inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Link Below"], key="pt_inputs_status", horizontal=True)
+                if inp_status == "Not Yet Provided":
+                    pt["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs"))
+                else:
+                    pt["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs")
+
+                st.markdown("**Location Dependency**")
+                is_pincode = st.radio("Pincode / Zipcode based?", ["Yes", "No"], key="pt_pincode_based", horizontal=True)
+                pt["Pincode Based"] = is_pincode
+                if is_pincode == "Yes":
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        pt["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001")
+                    with c2:
+                        pt["Client Pincode List Link"] = st.text_input("Pincode list link (if available)")
+
+                st.markdown("**Volume & Output**")
+                c1, c2 = st.columns(2)
+                with c1:
+                    pt["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products")
+                with c2:
+                    pt["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pt_screenshot", horizontal=True)
+
+            st.markdown("**Specific Fields to Capture**")
+            pt["Specific Fields"] = st.text_area(
+                "Any additional fields to extract",
+                placeholder="e.g., seller name, discount %, stock status, rating breakdown, delivery time",
+                key="pt_specific_fields",
+            )
+            form_data["Products + Trends"] = pt
+
+        # ── 4. SOS Module ─────────────────────────────────────────────────
+        if "SOS (Search on Site)" in modules:
+            section_header("🔍", "4. SOS (Search On Site) Module")
+            sos = {}
+
+            st.markdown("**Keywords**")
+            c1, c2 = st.columns(2)
+            with c1:
+                sos["No. of Keywords"] = st.number_input("Number of Keywords", min_value=0, key="sos_keyword_count")
+            with c2:
+                keywords_source = st.radio("Keywords source", ["Client Provided", "Provide Sample for Testing"], key="sos_keywords_source")
+            if keywords_source == "Client Provided":
+                sos["SOS Keywords Sheet Link"] = st.text_input("Link to client keywords sheet")
+            else:
+                sos["Sample Keywords"] = st.text_area("Sample keywords for testing", placeholder="e.g., laptop, shoes, home appliances")
+
+            st.markdown("**Domains**")
+            sos["Domains"] = domain_selector("Select Domains", "sos")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                sos["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="sos_zipcode_required")
+            if sos["Zipcode Required"] == "Yes":
+                sos["Pincode List"] = st.text_area("Pincode list (comma-separated or sheet link)", placeholder="e.g., 110001, 560001, 400001")
+
+            st.markdown("**Crawl Depth**")
+            c1, c2 = st.columns(2)
+            with c1:
+                sos["No. of Pages per Keyword"] = st.number_input("Pages per keyword", min_value=1, value=1, key="sos_pages")
+            with c2:
+                sos["No. of Products per Keyword"] = st.number_input("Products per keyword", min_value=1, value=10, key="sos_products")
+
+            st.markdown("**Crawl Frequency**")
+            freq, hourly = frequency_selector("SOS Crawl", "sos")
+            sos["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+            form_data["SOS (Search on Site)"] = sos
+
+        # ── 5. Reviews Module ─────────────────────────────────────────────
+        if "Reviews" in modules:
+            section_header("⭐", "5. Reviews Module")
+            rev = {}
+
+            st.markdown("**Domains**")
+            rev["Domains"] = domain_selector("Select Domains", "reviews")
+
+            st.markdown("**Review Source Type**")
+            rev["Input Sources"] = st.multiselect(
+                "Where to pull review inputs from",
+                ["From Products Index", "From Trends Index", "From Review Input URLs", "Category-based Reviews Crawl"],
+                key="rev_source",
+            )
+            if "From Review Input URLs" in rev["Input Sources"]:
+                rev["Sample Review URLs"] = st.text_area("Sample review page URLs", placeholder="Provide product review page URLs")
+
+            st.markdown("**Frequency**")
+            c1, c2 = st.columns(2)
+            with c1:
+                freq, hourly = frequency_selector("Reviews Crawl", "rev")
+                rev["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+            if hourly:
+                with c2:
+                    rev["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM")
+            form_data["Reviews"] = rev
+
+        # ── 6. Price Violation Module ─────────────────────────────────────
+        if "Price Violation" in modules:
+            section_header("💰", "6. Price Violation Module")
+            pv = {}
+
+            st.markdown("**Domains**")
+            pv["Domains"] = domain_selector("Select Domains", "pv")
+
+            st.markdown("**Frequency**")
+            freq, hourly = frequency_selector("Price Violation Crawl", "pv")
+            pv["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+
+            st.markdown("**Inputs**")
+            pv["Product URL List"] = st.text_area("Product URL list to monitor", placeholder="Sample product URLs")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                pv["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="pv_zipcode_required")
+            if pv["Zipcode Required"] == "Yes":
+                pv["Zipcode List"] = st.text_area("Zipcode list", placeholder="e.g., 110001, 560001, 400001")
+
+            pv["Price Violation Condition"] = st.text_area(
+                "Violation condition / rule",
+                placeholder="e.g., MRP > X, Discount < Y%, price diff > 15%"
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                pv["Sample Inputs Sheet Link"] = st.text_input("Sample inputs sheet link", placeholder="Link to sample data")
+            with c2:
+                pv["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pv_screenshot", horizontal=True)
+            form_data["Price Violation"] = pv
+
+        # ── 7. Store ID Crawls ────────────────────────────────────────────
+        if "Store ID Crawls" in modules:
+            section_header("🏪", "7. Store ID Crawl")
+            storeid = {}
+
+            st.markdown("**Domains**")
+            storeid["Domains"] = domain_selector("Select Domains", "storeid")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                storeid["Specific Location Required"] = st.radio(
+                    "Specific store locations needed?", ["No", "Yes"], horizontal=True, key="storeid_location"
+                )
+            if storeid["Specific Location Required"] == "Yes":
+                storeid["Location Details"] = st.text_area("Location details", placeholder="e.g., Bangalore, Mumbai, Delhi")
+
+            storeid_status = st.radio("Specific Pincode list available?", ["Yes", "No"], horizontal=True, key="storeid_list_status")
+            if storeid_status == "Yes":
+                storeid["Specific Pincode List Link"] = st.text_input("Pincode list link")
+            form_data["Store ID Crawls"] = storeid
+
+        # ── 8. Festive Sale Crawls ────────────────────────────────────────
+        if "Festive Sale Crawls" in modules:
+            section_header("🎉", "8. Festive Sale Crawls")
+            festive = {}
+
+            st.markdown("**Crawl Type**")
+            festive["Crawl Type"] = st.radio(
+                "festive_type",
+                ["Products + Trends Based", "SOS Type", "Category URL Based"],
+                key="festive_type", horizontal=True, label_visibility="collapsed",
+            )
+            if festive["Crawl Type"] == "Products + Trends Based":
+                festive["Domains"] = domain_selector("Select Domains", "festive")
+            elif festive["Crawl Type"] == "Category URL Based":
+                festive["Category URL List"] = st.text_area("Category URLs", placeholder="Provide category URLs for festive crawl")
+
+            st.markdown("**Schedule**")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                festive["Frequency Per Day"] = st.number_input("Frequency / day", min_value=1, value=1, key="festive_freq")
+            with c2:
+                festive["Start Date"] = str(st.date_input("Start Date", key="festive_start"))
+            with c3:
+                festive["End Date"] = str(st.date_input("End Date", key="festive_end"))
+            form_data["Festive Sale Crawls"] = festive
+
+        # ── 9. Final Alignment ────────────────────────────────────────────
+        section_header("🎯", "9. Final Alignment")
+        form_data["Final Alignment"] = {
+            "Client Core Objective": st.text_area(
+                "What is the client's core objective?",
+                placeholder="e.g., Market gap analysis, brand monitoring, competitive pricing intelligence, demand trends…",
+                key="final_objective",
+            ),
+            "Expectations From Us": st.text_area(
+                "What are you expecting from us?",
+                placeholder="e.g., Real-time dashboards, daily reports, anomaly alerts, competitive benchmarking…",
+                key="final_expectation",
+            ),
+        }
+
+        # ── 10. Comments ──────────────────────────────────────────────────
+        section_header("💬", "10. Comments & Notes")
+        form_data["Comments & Notes"] = {
+            "Additional Comments": st.text_area(
+                "Any additional notes or special instructions",
+                placeholder="Anything else important for the team to know…",
+                key="final_comments",
+            )
+        }
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # PDF Generation
+        if st.button("⬇️  Generate & Download PDF", type="primary", use_container_width=True):
+            with st.spinner("Building PDF…"):
+                pdf_bytes = generate_pdf(form_data, client_name).read()
+            st.session_state["pdf_bytes"] = pdf_bytes
+            st.session_state["pdf_name"]  = f"{client_name}_Requirement_Form.pdf"
+            celebrate(
+                message="PDF generated successfully!",
+                sub=f"{client_name} Requirement Form is ready to download."
+            )
+            st.toast("PDF ready! Click below to download.", icon="🎉")
+
+        if st.session_state.get("pdf_bytes"):
+            st.download_button(
+                label="📄  Download Requirement PDF",
+                data=st.session_state["pdf_bytes"],
+                file_name=st.session_state.get("pdf_name", "requirement.pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+    with right:
+        render_summary(form_data)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: FEASIBILITY ASSESSMENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_feasibility():
+    page_title(
+        "Feasibility Assessment",
+        "Evaluate crawl feasibility before project kickoff — exports a Word document for the team."
+    )
+
+    # Stats strip
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""
+        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
+            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Purpose</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Pre-project scoping</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
+            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Output</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Word Document (.docx)</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""
+        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
+            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Use Case</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Share with tech / ops team</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col, _ = st.columns([3, 1])
+    with col:
+
+        # Requirement Information
+        section_header("📌", "Requirement Information")
+        c1, c2 = st.columns(2)
+        with c1:
+            client_name = st.text_input("Client Name", placeholder="e.g., Unilever India", key="feas_client")
+        with c2:
+            requestor_name = st.text_input("Requestor Name", placeholder="Your name", key="feas_requestor")
 
         # Domains
-        st.markdown("**Domains**")
-        sos["Domains"] = domain_selector("Select Domains", "sos")
+        section_header("🌐", "Domain List")
+        num_domains = st.number_input("Number of Domains", min_value=1, step=1, value=1, key="feas_num_domains")
+        domains = []
+        if num_domains <= 6:
+            cols = st.columns(min(int(num_domains), 3))
+            for i in range(int(num_domains)):
+                with cols[i % 3]:
+                    d = st.text_input(f"Domain {i+1}", placeholder="example.com", key=f"feas_domain_{i}")
+                    if d:
+                        domains.append(d)
+        else:
+            for i in range(int(num_domains)):
+                d = st.text_input(f"Domain {i+1}", placeholder="example.com", key=f"feas_domain_{i}")
+                if d:
+                    domains.append(d)
+
+        # Crawl Configuration
+        section_header("⚙️", "Crawl Configuration")
+        crawl_options = st.multiselect(
+            "Select crawl type and special requirements",
+            ["Category Based", "Product URL Input Based", "SOS", "Reviews",
+             "Festive Sales Day Crawl", "Banner Crawl", "Others"],
+            key="feas_crawl_options",
+        )
+        crawl_type = None
+        if "Category Based" in crawl_options:
+            crawl_type = "Category Based"
+        elif "Product URL Input Based" in crawl_options:
+            crawl_type = "Product URL Input Based"
+
+        crawl_features = [o for o in crawl_options if o not in ["Category Based", "Product URL Input Based"]]
+        others_desc = ""
+        if "Others" in crawl_features:
+            others_desc = st.text_input("If Others, please specify", key="feas_others")
 
         # Zipcode
-        st.markdown("**Zipcode Required?**")
-        sos["Zipcode Required"] = st.radio(
-            "Is Zipcode required?",
-            ["Yes", "No"],
-            horizontal=True,
-            key="sos_zipcode_required"
+        section_header("📍", "Zipcode Requirement")
+        zipcode_type = st.radio(
+            "Zipcode handling", ["With Zipcode", "Without Zipcode", "Both"],
+            horizontal=True, key="feas_zipcode"
         )
-        if sos["Zipcode Required"] == "Yes":
-            sos["Pincode List"] = st.text_area(
-                "Pincode List (comma-separated or sheet link)",
-                placeholder="e.g., 110001, 560001, 400001"
+        target_city = target_state = target_country = ""
+        if zipcode_type in ["With Zipcode", "Both"]:
+            st.markdown("**Target Location**")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                target_city = st.text_input("City", key="feas_city")
+            with c2:
+                target_state = st.text_input("State", key="feas_state")
+            with c3:
+                target_country = st.text_input("Country", key="feas_country")
+
+        # Additional
+        section_header("📝", "Additional Information")
+        additional_notes = st.text_area("Additional details / notes", key="feas_notes", height=120)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Generate document
+        if st.button("📄  Generate Feasibility Document", type="primary", use_container_width=True):
+            if not client_name:
+                st.warning("Please enter a Client Name before generating.")
+            else:
+                with st.spinner("Building document…"):
+                    doc = Document()
+                    doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
+
+                    doc.add_heading("Requirement Information", level=2)
+                    doc.add_paragraph(f"Client Name: {client_name}")
+                    doc.add_paragraph(f"Requestor Name: {requestor_name}")
+
+                    doc.add_heading("Domains", level=2)
+                    for d in domains:
+                        doc.add_paragraph(d, style="List Bullet")
+
+                    doc.add_heading("Crawl Configuration", level=2)
+                    doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
+                    doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
+                    if others_desc:
+                        doc.add_paragraph(f"Others: {others_desc}")
+
+                    doc.add_heading("Zipcode Requirement", level=2)
+                    doc.add_paragraph(f"Zipcode Handling: {zipcode_type}")
+                    if zipcode_type in ["With Zipcode", "Both"]:
+                        doc.add_heading("Target Location", level=2)
+                        doc.add_paragraph(f"City: {target_city}")
+                        doc.add_paragraph(f"State: {target_state}")
+                        doc.add_paragraph(f"Country: {target_country}")
+
+                    doc.add_heading("Additional Notes", level=2)
+                    doc.add_paragraph(additional_notes or "None")
+
+                    buf = BytesIO()
+                    doc.save(buf)
+                    buf.seek(0)
+
+                st.session_state["feas_doc"]  = buf.getvalue()
+                st.session_state["feas_name"] = f"{client_name}_Feasibility_Requirement.docx"
+                celebrate(
+                    message="Feasibility Document generated!",
+                    sub=f"{client_name} feasibility doc is ready to download."
+                )
+                st.toast("Document ready! Click below to download.", icon="🎉")
+
+        if st.session_state.get("feas_doc"):
+            st.download_button(
+                label="⬇️  Download Feasibility Document",
+                data=st.session_state["feas_doc"],
+                file_name=st.session_state.get("feas_name", "feasibility.docx"),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
             )
 
-        # Crawl Depth
-        st.markdown("**Crawl Depth**")
-        col1, col2 = st.columns(2)
-        with col1:
-            sos["No. of Pages"] = st.number_input(
-                "Number of Pages per keyword",
-                min_value=1,
-                value=1,
-                key="sos_pages"
-            )
-        with col2:
-            sos["No. of Products"] = st.number_input(
-                "Number of Products per keyword",
-                min_value=1,
-                value=10,
-                key="sos_products"
-            )
 
-        # Frequency
-        st.markdown("**Frequency**")
-        freq, hourly = frequency_selector("SOS Crawl", "sos")
-        sos["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: DECISION MIND MAP
+# ─────────────────────────────────────────────────────────────────────────────
 
-        form_data["SOS (Search on Site)"] = sos
+def render_req_flow():
+    page_title("New Requirement Decision Tree", "Step-by-step guide from client intake to delivery. Click nodes to expand.")
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;font-size:0.81rem;"><span style="color:#3b82f6;font-weight:600;">&#9646; Step</span><span style="color:#d97706;font-weight:600;">&#9646; Decision</span><span style="color:#22c55e;font-weight:600;">&#9646; Outcome</span><span style="color:#94a3b8;font-weight:600;">&#9646; Action</span><span style="color:#6b7280;margin-left:auto;font-size:0.78rem;">8 sequential steps &mdash; intake to delivery</span></div>""", unsafe_allow_html=True)
+    _html = """<!DOCTYPE html><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
+  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+#tree{width:100vw;height:100vh;}
+.node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
+.node rect:hover{opacity:.82;}
+.node text{pointer-events:none;font-weight:500;}
+.link{fill:none;stroke-width:1.6px;opacity:.4;}
+#legend{position:absolute;top:12px;right:14px;background:rgba(255,255,255,.93);
+  border:1px solid #e5e7eb;border-radius:9px;padding:10px 14px;
+  font-size:12px;color:#374151;line-height:2.1;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);}
+#hint{position:absolute;bottom:10px;right:14px;font-size:10px;color:#9ca3af;}
+</style>
+<div id="tree"></div>
+<div id="legend"><b>Node Types</b><br><span style='color:#3b82f6'>&#9646;</span> Step &nbsp;<span style='color:#d97706'>&#9646;</span> Decision &nbsp;<span style='color:#22c55e'>&#9646;</span> Outcome &nbsp;<span style='color:#94a3b8'>&#9646;</span> Action</div>
+<div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+var data={name:"New Requirement Intake",k:"start",children:[
+{name:"1. Finalise Domains",k:"step",children:[
+  {name:"QCommerce",k:"act",children:[{name:"Swiggy Instamart"},{name:"ZeptoNow"},{name:"Blinkit"},{name:"BigBasket"}]},
+  {name:"ECom",k:"act",children:[{name:"Amazon"},{name:"Flipkart"},{name:"Nykaa"},{name:"Purplle"}]},
+  {name:"Fashion Retail",k:"act",children:[{name:"AJIO"},{name:"Myntra"}]}
+]},
+{name:"2. Classify Seed URLs",k:"step",children:[
+  {name:"Category URL?",k:"dec",children:[
+    {name:"PDP crawl",k:"out",children:[{name:"Products Index"},{name:"Trends Index"}]},
+    {name:"Listing page",k:"out",children:[{name:"SOS Index"}]},
+    {name:"Banner present",k:"out",children:[{name:"Misc Index"}]}
+  ]},
+  {name:"Direct Product URL?",k:"dec",children:[
+    {name:"Trends Index only",k:"out"}
+  ]},
+  {name:"SOS Keyword input?",k:"dec",children:[
+    {name:"SOS Index",k:"out",children:[{name:"No PDP fetch"},{name:"Listing page only"}]}
+  ]},
+  {name:"Reviews needed?",k:"dec",children:[
+    {name:"Reviews Index",k:"out",children:[{name:"ES input from Products"}]}
+  ]},
+  {name:"Banner tracking?",k:"dec",children:[
+    {name:"API available",k:"out",children:[{name:"Misc API crawl"}]},
+    {name:"No API",k:"out",children:[{name:"Screenshot method"}]}
+  ]}
+]},
+{name:"3. Index Decision",k:"step",children:[
+  {name:"Zipcode based?",k:"dec",children:[
+    {name:"YES: add _zipcode",k:"out"},
+    {name:"NO: standard name",k:"out"}
+  ]},
+  {name:"Historical tracking?",k:"dec",children:[
+    {name:"YES: Trends/SOS/Misc",k:"out"},
+    {name:"NO: Products/Reviews",k:"out"}
+  ]},
+  {name:"Variants needed?",k:"dec",children:[
+    {name:"YES: uniq_id/variant",k:"out"},
+    {name:"NO: uniq_id/product",k:"out"}
+  ]},
+  {name:"Assign Domain #",k:"act",children:[
+    {name:"Products: no number"},
+    {name:"Sheet Hourly: #1"},
+    {name:"ES Daily: #2"},
+    {name:"ES Hourly: #3"},
+    {name:"SOS / PV: #4"},
+    {name:"Others: #5+"}
+  ]}
+]},
+{name:"4. Feasibility Check",k:"step",children:[
+  {name:"Check schema sheet",k:"act",children:[
+    {name:"Must-have fields"},{name:"General feasibility"}
+  ]},
+  {name:"Special fields?",k:"dec",children:[
+    {name:"YES: define + Platform",k:"out"},
+    {name:"NO: proceed",k:"out"}
+  ]},
+  {name:"Blocking challenge?",k:"dec",children:[
+    {name:"YES: raise flag early",k:"out"},
+    {name:"NO: proceed",k:"out"}
+  ]}
+]},
+{name:"5. Site Setup",k:"step",children:[
+  {name:"Domain exists?",k:"dec",children:[
+    {name:"YES: reuse (even active)",k:"out"},
+    {name:"NO: ask TPM to create",k:"out"}
+  ]},
+  {name:"Define site name",k:"act",children:[
+    {name:"domain_tld{#}{_zip}"},
+    {name:"_{index}_forty_two_signals"}
+  ]},
+  {name:"Update mapping JSON",k:"act",children:[
+    {name:"domain_numbered_sites"},
+    {name:"_mapping.json"}
+  ]}
+]},
+{name:"6. Dev Implementation",k:"step",children:[
+  {name:"Products: RSS→DSK→EXT",k:"act",children:[
+    {name:"uniq_id unique always"},
+    {name:"internal_client_name"},
+    {name:"joining_key required"},
+    {name:"ISO date format only"}
+  ]},
+  {name:"Trends: inherit DSK+EXT",k:"act",children:[
+    {name:"RSS changes only"},
+    {name:"uniq_id unchanged"}
+  ]},
+  {name:"SOS: listing only",k:"act",children:[
+    {name:"No PDP fetch"},
+    {name:"Scroll / page limit"}
+  ]}
+]},
+{name:"7. Post-Setup Checks",k:"step",children:[
+  {name:"Dev QA all fields",k:"act"},
+  {name:"Count match?",k:"dec",children:[
+    {name:"Crawlboard = Kibana",k:"out"},
+    {name:"Mismatch: check logs",k:"out"}
+  ]},
+  {name:"All records indexed?",k:"dec",children:[
+    {name:"YES: QA phase",k:"out"},
+    {name:"NO: debug logstash",k:"out"}
+  ]}
+]},
+{name:"8. QA & Delivery",k:"step",children:[
+  {name:"Products dashboard QA",k:"act"},
+  {name:"Trends QA (after prod)",k:"act"},
+  {name:"Kibana = Crawlboard?",k:"dec",children:[
+    {name:"OK: share Kibana link",k:"out"},
+    {name:"Fail: debug logstash",k:"out"}
+  ]},
+  {name:"QA passed?",k:"dec",children:[
+    {name:"YES: deliver to client",k:"out"},
+    {name:"NO: fix and re-QA",k:"out"}
+  ]}
+]}
+]};
+var NW=196,NH=48,NR=9;
+var M={top:60,right:240,bottom:60,left:210};
+var W=window.innerWidth-M.left-M.right;
+var H=window.innerHeight-M.top-M.bottom;
+var svg=d3.select("#tree").append("svg")
+  .attr("width",W+M.left+M.right).attr("height",H+M.top+M.bottom)
+  .call(d3.zoom().scaleExtent([.18,3]).on("zoom",e=>g.attr("transform",e.transform)))
+  .on("dblclick.zoom",null);
+var g=svg.append("g").attr("transform","translate("+M.left+","+(M.top+H/2)+")");
+var i=0,dur=400;
+var root=d3.hierarchy(data);
+root.x0=0;root.y0=0;
 
-        st.markdown("---")
+var KF={start:"#1f2937",step:"#dbeafe",dec:"#fef3c7",out:"#dcfce7",act:"#f1f5f9"};
+var KB={start:"#111827",step:"#3b82f6",dec:"#d97706",out:"#22c55e",act:"#94a3b8"};
+var KT={start:"#fff",step:"#1e40af",dec:"#92400e",out:"#14532d",act:"#374151"};
+function nFill(d){if(d.depth===0)return KF.start;return KF[d.data.k]||"#f3f4f6";}
+function nBorder(d){if(d.depth===0)return KB.start;return KB[d.data.k]||"#d1d5db";}
+function nText(d){if(d.depth===0)return KT.start;return KT[d.data.k]||"#374151";}
+root.children.forEach(collapse);
+update(root);
+function collapse(d){if(d.children){d._children=d.children;d._children.forEach(collapse);d.children=null;}}
+function wrap(t,n){if(t.length<=n)return[t];var m=t.lastIndexOf(" ",n);if(m<1)m=n;return[t.slice(0,m),t.slice(m+1)];}
+function update(src){
+  var tree=d3.tree().nodeSize([NH+28,1]);
+  var td=tree(root);
+  var nodes=td.descendants(),links=td.descendants().slice(1);
+  var colW=Math.max(NW+36,W/5.4);nodes.forEach(d=>d.y=d.depth*colW);
+  var node=g.selectAll("g.node").data(nodes,d=>d.id||(d.id=++i));
+  var ne=node.enter().append("g").attr("class","node")
+    .attr("transform",()=>"translate("+src.y0+","+src.x0+")")
+    .on("click",click);
+  ne.append("rect")
+    .attr("width",NW).attr("height",NH).attr("x",-NW/2).attr("y",-NH/2)
+    .attr("rx",NR).attr("ry",NR)
+    .style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d))
+    .style("filter","drop-shadow(0 2px 5px rgba(0,0,0,.07))");
+  ne.each(function(d){
+    var el=d3.select(this),ln=wrap(d.data.name,23);
+    var dy1=ln.length===1?"0.35em":"-0.5em", dy2="0.82em";
+    el.append("text").attr("dy",dy1).attr("text-anchor","middle")
+      .style("font-size","13px").style("fill",nText(d)).text(ln[0]);
+    if(ln.length>1)
+      el.append("text").attr("dy",dy2).attr("text-anchor","middle")
+        .style("font-size","12px").style("fill",nText(d)).text(ln[1]);
+  });
+  ne.append("text").attr("class","ind")
+    .attr("dy","0.35em").attr("x",NW/2-9).attr("text-anchor","middle")
+    .style("font-size","9px");
+  var nu=ne.merge(node);
+  nu.transition().duration(dur).attr("transform",d=>"translate("+d.y+","+d.x+")");
+  nu.select("rect").style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d));
+  nu.select(".ind")
+    .text(d=>(d._children||d.children)?"●":"")
+    .style("fill",d=>nBorder(d))
+    .style("opacity",d=>(d._children||d.children)?1:0);
+  node.exit().transition().duration(dur)
+    .attr("transform",()=>"translate("+src.y+","+src.x+")").remove();
+  var link=g.selectAll("path.link").data(links,d=>d.id);
+  var le=link.enter().insert("path","g").attr("class","link")
+    .attr("d",()=>{var o={x:src.x0,y:src.y0};return diag(o,o);})
+    .style("stroke",d=>nBorder(d));
+  le.merge(link).transition().duration(dur).attr("d",d=>diag(d,d.parent));
+  link.exit().transition().duration(dur)
+    .attr("d",()=>{var o={x:src.x,y:src.y};return diag(o,o);}).remove();
+  nodes.forEach(d=>{d.x0=d.x;d.y0=d.y;});
+}
+function diag(s,d){
+  return"M"+s.y+" "+s.x+" C"+(s.y+d.y)/2+" "+s.x+","+(s.y+d.y)/2+" "+d.x+","+d.y+" "+d.x;
+}
+function click(e,d){
+  if(d.children){d._children=d.children;d.children=null;}
+  else{d.children=d._children;d._children=null;}
+  update(d);
+}
+</script>"""
+    components.html(_html, height=1000, scrolling=False)
 
-    # 5. REVIEWS MODULE
-    if "Reviews" in modules:
-        st.header("5. REVIEWS MODULE")
+def render_ops_map():
+    page_title("Day-to-Day Operations Mind Map", "All 7 operational areas — expand any branch to explore tasks & tools.")
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;font-size:0.81rem;color:#6b7280;">7 operational areas &mdash; expand any branch &nbsp;&middot;&nbsp; scroll = zoom &nbsp;&middot;&nbsp; drag = pan</div>""", unsafe_allow_html=True)
+    _html = """<!DOCTYPE html><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
+  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+#tree{width:100vw;height:100vh;}
+.node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
+.node rect:hover{opacity:.82;}
+.node text{pointer-events:none;font-weight:500;}
+.link{fill:none;stroke-width:1.6px;opacity:.4;}
+#legend{position:absolute;top:12px;right:14px;background:rgba(255,255,255,.93);
+  border:1px solid #e5e7eb;border-radius:9px;padding:10px 14px;
+  font-size:12px;color:#374151;line-height:2.1;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);}
+#hint{position:absolute;bottom:10px;right:14px;font-size:10px;color:#9ca3af;}
+</style>
+<div id="tree"></div>
+<div id="legend"><b>Operational Areas</b><br><span style='color:#2563eb'>&#9646;</span> Kibana Monitoring<br><span style='color:#059669'>&#9646;</span> Input Sheets<br><span style='color:#d97706'>&#9646;</span> Cost Analysis<br><span style='color:#7c3aed'>&#9646;</span> Crawl Health<br><span style='color:#dc2626'>&#9646;</span> Mapping & Tracking<br><span style='color:#0891b2'>&#9646;</span> Maintenance<br><span style='color:#be185d'>&#9646;</span> Automation<br></div>
+<div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+var data={name:"Daily Operations Hub",children:[
+{name:"Kibana Monitoring",children:[
+  {name:"Client vs Site",children:[
+    {name:"Active clients list"},
+    {name:"Crawl frequency"},
+    {name:"Records by site"},
+    {name:"Client % share/site"}
+  ]},
+  {name:"Proxy Status",children:[
+    {name:"Success/fail rate"},
+    {name:"Oxylabs premium"},
+    {name:"Weekly check"}
+  ]},
+  {name:"Disk Time Opt.",children:[
+    {name:"Slow sites identify"},
+    {name:"Infinity loop detect"},
+    {name:"Weekly + on-demand"}
+  ]},
+  {name:"Extraction Duration",children:[
+    {name:"Slow parsers"},
+    {name:"XPath bottlenecks"},
+    {name:"Weekly check"}
+  ]},
+  {name:"Cost Analytics",children:[
+    {name:"Client vs Site dash"},
+    {name:"Monthly infra cost"},
+    {name:"% data per client"}
+  ]}
+]},
+{name:"Input Sheet Mgmt",children:[
+  {name:"Data Request Format",children:[
+    {name:"Client URLs + pincodes"},
+    {name:"Crawl scheduling"},
+    {name:"pincode_uniq_id logic"},
+    {name:"Closed clients view"},
+    {name:"Kibana link viewer"}
+  ]},
+  {name:"Add / Update URLs",children:[
+    {name:"Sheet-based input"},
+    {name:"ES-based input"},
+    {name:"Pincode CSV input"}
+  ]},
+  {name:"AppScript Automation",children:[
+    {name:"Auto crawl tracking"},
+    {name:"Threshold alerts"},
+    {name:"Status updates"}
+  ]}
+]},
+{name:"Cost Analysis",children:[
+  {name:"Clientwise (Monthly)",children:[
+    {name:"Current vs prev cycle"},
+    {name:"n-month trend"},
+    {name:"42s Clientwise sheet"}
+  ]},
+  {name:"Sitewise (Monthly)",children:[
+    {name:"Cost per site"},
+    {name:"% data per client"},
+    {name:"42s Sitewise sheet"}
+  ]},
+  {name:"InfraCost Input",children:[
+    {name:"Platform + DevOps"},
+    {name:"Manual ES indexing"},
+    {name:"42s input data sheet"}
+  ]}
+]},
+{name:"Crawl Health",children:[
+  {name:"Count Mismatch",children:[
+    {name:"Kibana vs Crawlboard"},
+    {name:"Threshold sheet"},
+    {name:"42S avg threshold"}
+  ]},
+  {name:"Failure Logs",children:[
+    {name:"lbhdf12_logstash.log"},
+    {name:"lbhdf13_logstash.log"},
+    {name:"Copied hourly to ex51"}
+  ]},
+  {name:"Misc + Dep Sites",children:[
+    {name:"Misc processing tracker"},
+    {name:"Dep data upload tracker"},
+    {name:"Banner sites progress"}
+  ]}
+]},
+{name:"Mapping & Tracking",children:[
+  {name:"Client-Site Mapping",children:[
+    {name:"Client to site view"},
+    {name:"Site to client view"},
+    {name:"Active sites list"}
+  ]},
+  {name:"Domain Mapping JSON",children:[
+    {name:"Products to Trends link"},
+    {name:"domain_numbered_sites"},
+    {name:"Update on new site"}
+  ]},
+  {name:"42S Schema Sheet",children:[
+    {name:"Field definitions"},
+    {name:"Must-have fields"},
+    {name:"Index-specific fields"}
+  ]}
+]},
+{name:"Maintenance",children:[
+  {name:"Weekly Tasks",children:[
+    {name:"Disk time review"},
+    {name:"Extraction duration"},
+    {name:"Proxy health check"},
+    {name:"Image count check"}
+  ]},
+  {name:"Monthly Tasks",children:[
+    {name:"Retrospection doc"},
+    {name:"Aggregated report"},
+    {name:"Clientwise cost"},
+    {name:"Sitewise cost"}
+  ]},
+  {name:"On-Demand Tasks",children:[
+    {name:"New site addition"},
+    {name:"Client pause/resume"},
+    {name:"Threshold updates"},
+    {name:"InfraCost update"}
+  ]}
+]},
+{name:"Automation",children:[
+  {name:"Google App Scripts",children:[
+    {name:"Data Request Format"},
+    {name:"Clientwise cost"},
+    {name:"Sitewise cost"},
+    {name:"Threshold alerts"}
+  ]},
+  {name:"Ruby Scripts",children:[
+    {name:"Volume adjustment"},
+    {name:"Missing upload check"},
+    {name:"Weekly crawl tracker"}
+  ]}
+]}
+]};
+var NW=196,NH=48,NR=9;
+var M={top:60,right:240,bottom:60,left:210};
+var W=window.innerWidth-M.left-M.right;
+var H=window.innerHeight-M.top-M.bottom;
+var svg=d3.select("#tree").append("svg")
+  .attr("width",W+M.left+M.right).attr("height",H+M.top+M.bottom)
+  .call(d3.zoom().scaleExtent([.18,3]).on("zoom",e=>g.attr("transform",e.transform)))
+  .on("dblclick.zoom",null);
+var g=svg.append("g").attr("transform","translate("+M.left+","+(M.top+H/2)+")");
+var i=0,dur=400;
+var root=d3.hierarchy(data);
+root.x0=0;root.y0=0;
+var BC=["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#be185d"];
+function getBC(d){
+  var a=d;while(a.depth>1&&a.parent)a=a.parent;
+  if(a.depth===0)return"#1f2937";
+  return BC[(a.parent?a.parent.children.indexOf(a):0)%BC.length];
+}
+function nFill(d){
+  if(d.depth===0)return"#1f2937";
+  if(d.depth===1){var c=getBC(d);return c+"18";}
+  return"#f3f4f6";
+}
+function nBorder(d){return getBC(d);}
+function nText(d){
+  if(d.depth===0)return"#fff";
+  if(d.depth===1)return getBC(d);
+  return"#374151";
+}
+root.children.forEach(collapse);
+update(root);
+function collapse(d){if(d.children){d._children=d.children;d._children.forEach(collapse);d.children=null;}}
+function wrap(t,n){if(t.length<=n)return[t];var m=t.lastIndexOf(" ",n);if(m<1)m=n;return[t.slice(0,m),t.slice(m+1)];}
+function update(src){
+  var tree=d3.tree().nodeSize([NH+28,1]);
+  var td=tree(root);
+  var nodes=td.descendants(),links=td.descendants().slice(1);
+  var colW=Math.max(NW+36,W/5.4);nodes.forEach(d=>d.y=d.depth*colW);
+  var node=g.selectAll("g.node").data(nodes,d=>d.id||(d.id=++i));
+  var ne=node.enter().append("g").attr("class","node")
+    .attr("transform",()=>"translate("+src.y0+","+src.x0+")")
+    .on("click",click);
+  ne.append("rect")
+    .attr("width",NW).attr("height",NH).attr("x",-NW/2).attr("y",-NH/2)
+    .attr("rx",NR).attr("ry",NR)
+    .style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d))
+    .style("filter","drop-shadow(0 2px 5px rgba(0,0,0,.07))");
+  ne.each(function(d){
+    var el=d3.select(this),ln=wrap(d.data.name,23);
+    var dy1=ln.length===1?"0.35em":"-0.5em", dy2="0.82em";
+    el.append("text").attr("dy",dy1).attr("text-anchor","middle")
+      .style("font-size","13px").style("fill",nText(d)).text(ln[0]);
+    if(ln.length>1)
+      el.append("text").attr("dy",dy2).attr("text-anchor","middle")
+        .style("font-size","12px").style("fill",nText(d)).text(ln[1]);
+  });
+  ne.append("text").attr("class","ind")
+    .attr("dy","0.35em").attr("x",NW/2-9).attr("text-anchor","middle")
+    .style("font-size","9px");
+  var nu=ne.merge(node);
+  nu.transition().duration(dur).attr("transform",d=>"translate("+d.y+","+d.x+")");
+  nu.select("rect").style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d));
+  nu.select(".ind")
+    .text(d=>(d._children||d.children)?"●":"")
+    .style("fill",d=>nBorder(d))
+    .style("opacity",d=>(d._children||d.children)?1:0);
+  node.exit().transition().duration(dur)
+    .attr("transform",()=>"translate("+src.y+","+src.x+")").remove();
+  var link=g.selectAll("path.link").data(links,d=>d.id);
+  var le=link.enter().insert("path","g").attr("class","link")
+    .attr("d",()=>{var o={x:src.x0,y:src.y0};return diag(o,o);})
+    .style("stroke",d=>nBorder(d));
+  le.merge(link).transition().duration(dur).attr("d",d=>diag(d,d.parent));
+  link.exit().transition().duration(dur)
+    .attr("d",()=>{var o={x:src.x,y:src.y};return diag(o,o);}).remove();
+  nodes.forEach(d=>{d.x0=d.x;d.y0=d.y;});
+}
+function diag(s,d){
+  return"M"+s.y+" "+s.x+" C"+(s.y+d.y)/2+" "+s.x+","+(s.y+d.y)/2+" "+d.x+","+d.y+" "+d.x;
+}
+function click(e,d){
+  if(d.children){d._children=d.children;d.children=null;}
+  else{d.children=d._children;d._children=null;}
+  update(d);
+}
+</script>"""
+    components.html(_html, height=1000, scrolling=False)
 
-        rev = {}
-        
-        rev["Domains"] = domain_selector("Select Domains", "reviews")
+def render_poc_guide():
+    page_title("Task POC Guide", "Who to contact for every task type. Colour-coded by responsible team.")
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;font-size:0.81rem;"><span style="color:#3b82f6;font-weight:600;">&#9646; Shanjai/Srinivas</span><span style="color:#7c3aed;font-weight:600;">&#9646; Dev Team</span><span style="color:#d97706;font-weight:600;">&#9646; Platform</span><span style="color:#dc2626;font-weight:600;">&#9646; TPM</span><span style="color:#16a34a;font-weight:600;">&#9646; DS/QA/Product</span></div>""", unsafe_allow_html=True)
+    _html = """<!DOCTYPE html><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
+  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+#tree{width:100vw;height:100vh;}
+.node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
+.node rect:hover{opacity:.82;}
+.node text{pointer-events:none;font-weight:500;}
+.link{fill:none;stroke-width:1.6px;opacity:.4;}
+#legend{position:absolute;top:12px;right:14px;background:rgba(255,255,255,.93);
+  border:1px solid #e5e7eb;border-radius:9px;padding:10px 14px;
+  font-size:12px;color:#374151;line-height:2.1;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);}
+#hint{position:absolute;bottom:10px;right:14px;font-size:10px;color:#9ca3af;}
+</style>
+<div id="tree"></div>
+<div id="legend"><b>Point of Contact</b><br><span style='color:#3b82f6'>&#9646;</span> Shanjai / Srinivas<br><span style='color:#7c3aed'>&#9646;</span> Dev Team<br><span style='color:#d97706'>&#9646;</span> Platform Team<br><span style='color:#dc2626'>&#9646;</span> TPM<br><span style='color:#16a34a'>&#9646;</span> DS / QA / Product</div>
+<div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+var data={name:"Task POC Guide",k:"root",children:[
+{name:"Site Setup",k:"dev",children:[
+  {name:"New site needed",k:"tpm",children:[
+    {name:"Contact: TPM",k:"tpm"},
+    {name:"Provide: name + index"},
+    {name:"PSS created by TPM"},
+    {name:"Dev does setup after"}
+  ]},
+  {name:"Reuse existing site",k:"dev",children:[
+    {name:"Contact: Dev team",k:"dev"},
+    {name:"Add seed URLs only"},
+    {name:"OK even if site active"}
+  ]},
+  {name:"Naming convention",k:"sh",children:[
+    {name:"Contact: Shanjai",k:"sh"},
+    {name:"Ref: 42S Documentation"},
+    {name:"domain_tld{#}_{idx}_42s"}
+  ]},
+  {name:"Domain mapping JSON",k:"dev",children:[
+    {name:"Contact: Dev team",k:"dev"},
+    {name:"domain_numbered_sites"},
+    {name:"_mapping.json"}
+  ]}
+]},
+{name:"Schema & Fields",k:"plat",children:[
+  {name:"New field addition",k:"plat",children:[
+    {name:"Contact: Platform team",k:"plat"},
+    {name:"Finalise name + type"},
+    {name:"Platform updates DRL"},
+    {name:"Then Dev implements"},
+    {name:"Eg: weekly_units_sold"}
+  ]},
+  {name:"DRL / EXT changes",k:"dev",children:[
+    {name:"Contact: Dev team",k:"dev"},
+    {name:"After Platform mapping"}
+  ]},
+  {name:"Schema review",k:"sh",children:[
+    {name:"Contact: Shanjai/Dev",k:"sh"},
+    {name:"Check 42S schema sheet"}
+  ]}
+]},
+{name:"Crawl Issues",k:"dev",children:[
+  {name:"Crawl not running",k:"dev",children:[
+    {name:"Contact: Dev → TPM",k:"dev"},
+    {name:"Check crawl-board logs"},
+    {name:"Check proxy status"}
+  ]},
+  {name:"Count mismatch",k:"sh",children:[
+    {name:"Contact: Shanjai/Srinivas",k:"sh"},
+    {name:"Kibana vs Crawlboard"},
+    {name:"Check logstash logs"},
+    {name:"Threshold sheet review"}
+  ]},
+  {name:"Proxy failures",k:"sh",children:[
+    {name:"Contact: Srinivas/Shanjai",k:"sh"},
+    {name:"proxy_overview dash"},
+    {name:"Oxylabs premium check"}
+  ]},
+  {name:"Extraction errors",k:"dev",children:[
+    {name:"Contact: Dev team",k:"dev"},
+    {name:"XPath / JS page issues"},
+    {name:"lbhdf12/13 logstash"}
+  ]}
+]},
+{name:"Client Requirements",k:"sh",children:[
+  {name:"New client intake",k:"sh",children:[
+    {name:"Contact: Shanjai",k:"sh"},
+    {name:"Classify seed URLs"},
+    {name:"Feasibility check"},
+    {name:"Coordinate with product"}
+  ]},
+  {name:"New Balance",k:"sh",children:[
+    {name:"Image download: Shanjai",k:"sh"},
+    {name:"Server upload: Platform",k:"plat"},
+    {name:"Product matching: DS",k:"ds"},
+    {name:"QA annotation: QA team",k:"ds"},
+    {name:"New fields: Platform",k:"plat"}
+  ]},
+  {name:"RamyBrook",k:"dev",children:[
+    {name:"JSON mapping: Dev",k:"dev"},
+    {name:"Saks cart flow: Dev",k:"dev"},
+    {name:"Python-Ruby: Dev",k:"dev"},
+    {name:"Validation: DS+QA",k:"ds"}
+  ]},
+  {name:"Client escalation",k:"tpm",children:[
+    {name:"Contact: TPM",k:"tpm"},
+    {name:"TPM → Mgmt if needed"}
+  ]}
+]},
+{name:"Cost & Infra",k:"plat",children:[
+  {name:"Monthly cost report",k:"plat",children:[
+    {name:"Contact: Platform+DevOps",k:"plat"},
+    {name:"Generates infra spend"},
+    {name:"Manually indexed to ES"}
+  ]},
+  {name:"Clientwise analysis",k:"sh",children:[
+    {name:"Contact: Shanjai",k:"sh"},
+    {name:"42s Clientwise sheet"},
+    {name:"Current vs prev cycle"}
+  ]},
+  {name:"Sitewise analysis",k:"sh",children:[
+    {name:"Contact: Shanjai",k:"sh"},
+    {name:"42s Sitewise sheet"}
+  ]},
+  {name:"InfraCost input",k:"sh",children:[
+    {name:"Contact: Shanjai/Srinivas",k:"sh"},
+    {name:"42s input data sheet"}
+  ]}
+]},
+{name:"Maintenance Tasks",k:"sh",children:[
+  {name:"Weekly checks",k:"sh",children:[
+    {name:"Contact: Shanjai/Srinivas",k:"sh"},
+    {name:"Disk, Proxy, Extraction"},
+    {name:"Image counts"}
+  ]},
+  {name:"Monthly reports",k:"sh",children:[
+    {name:"Contact: Shanjai/Srinivas",k:"sh"},
+    {name:"Retrospection doc"},
+    {name:"Cost analysis sheets"}
+  ]},
+  {name:"On-demand updates",k:"sh",children:[
+    {name:"Contact: Shanjai",k:"sh"},
+    {name:"New site threshold"},
+    {name:"Mapping sheet update"}
+  ]}
+]},
+{name:"Escalation Path",k:"tpm",children:[
+  {name:"Platform change",k:"plat",children:[
+    {name:"Contact: Platform team",k:"plat"},
+    {name:"Schema / DRL / infra"}
+  ]},
+  {name:"New site creation",k:"tpm",children:[
+    {name:"Contact: TPM",k:"tpm"},
+    {name:"PSS → Dev setup"}
+  ]},
+  {name:"Client SLA issue",k:"tpm",children:[
+    {name:"Contact: TPM",k:"tpm"},
+    {name:"TPM → Management"}
+  ]}
+]}
+]};
+var NW=196,NH=48,NR=9;
+var M={top:60,right:240,bottom:60,left:210};
+var W=window.innerWidth-M.left-M.right;
+var H=window.innerHeight-M.top-M.bottom;
+var svg=d3.select("#tree").append("svg")
+  .attr("width",W+M.left+M.right).attr("height",H+M.top+M.bottom)
+  .call(d3.zoom().scaleExtent([.18,3]).on("zoom",e=>g.attr("transform",e.transform)))
+  .on("dblclick.zoom",null);
+var g=svg.append("g").attr("transform","translate("+M.left+","+(M.top+H/2)+")");
+var i=0,dur=400;
+var root=d3.hierarchy(data);
+root.x0=0;root.y0=0;
 
-        st.markdown("**Review Source Type**")
-        rev["Input Sources"] = st.multiselect(
-            "Where to take review inputs from?",
-            [
-                "From Products Index",
-                "From Trends Index",
-                "From Review Input URLs",
-                "Category-based Reviews Crawl"
-            ],
-            key="rev_source"
-        )
+var KF={root:"#1f2937",sh:"#dbeafe",dev:"#ede9fe",plat:"#fef3c7",tpm:"#fee2e2",ds:"#dcfce7"};
+var KB={root:"#111827",sh:"#3b82f6",dev:"#7c3aed",plat:"#d97706",tpm:"#dc2626",ds:"#16a34a"};
+var KT={root:"#fff",sh:"#1e40af",dev:"#5b21b6",plat:"#92400e",tpm:"#991b1b",ds:"#14532d"};
+function nFill(d){if(d.depth===0)return KF.root;return KF[d.data.k]||"#f3f4f6";}
+function nBorder(d){if(d.depth===0)return KB.root;return KB[d.data.k]||"#d1d5db";}
+function nText(d){if(d.depth===0)return KT.root;return KT[d.data.k]||"#374151";}
+root.children.forEach(collapse);
+update(root);
+function collapse(d){if(d.children){d._children=d.children;d._children.forEach(collapse);d.children=null;}}
+function wrap(t,n){if(t.length<=n)return[t];var m=t.lastIndexOf(" ",n);if(m<1)m=n;return[t.slice(0,m),t.slice(m+1)];}
+function update(src){
+  var tree=d3.tree().nodeSize([NH+28,1]);
+  var td=tree(root);
+  var nodes=td.descendants(),links=td.descendants().slice(1);
+  var colW=Math.max(NW+36,W/5.4);nodes.forEach(d=>d.y=d.depth*colW);
+  var node=g.selectAll("g.node").data(nodes,d=>d.id||(d.id=++i));
+  var ne=node.enter().append("g").attr("class","node")
+    .attr("transform",()=>"translate("+src.y0+","+src.x0+")")
+    .on("click",click);
+  ne.append("rect")
+    .attr("width",NW).attr("height",NH).attr("x",-NW/2).attr("y",-NH/2)
+    .attr("rx",NR).attr("ry",NR)
+    .style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d))
+    .style("filter","drop-shadow(0 2px 5px rgba(0,0,0,.07))");
+  ne.each(function(d){
+    var el=d3.select(this),ln=wrap(d.data.name,23);
+    var dy1=ln.length===1?"0.35em":"-0.5em", dy2="0.82em";
+    el.append("text").attr("dy",dy1).attr("text-anchor","middle")
+      .style("font-size","13px").style("fill",nText(d)).text(ln[0]);
+    if(ln.length>1)
+      el.append("text").attr("dy",dy2).attr("text-anchor","middle")
+        .style("font-size","12px").style("fill",nText(d)).text(ln[1]);
+  });
+  ne.append("text").attr("class","ind")
+    .attr("dy","0.35em").attr("x",NW/2-9).attr("text-anchor","middle")
+    .style("font-size","9px");
+  var nu=ne.merge(node);
+  nu.transition().duration(dur).attr("transform",d=>"translate("+d.y+","+d.x+")");
+  nu.select("rect").style("fill",d=>nFill(d)).style("stroke",d=>nBorder(d));
+  nu.select(".ind")
+    .text(d=>(d._children||d.children)?"●":"")
+    .style("fill",d=>nBorder(d))
+    .style("opacity",d=>(d._children||d.children)?1:0);
+  node.exit().transition().duration(dur)
+    .attr("transform",()=>"translate("+src.y+","+src.x+")").remove();
+  var link=g.selectAll("path.link").data(links,d=>d.id);
+  var le=link.enter().insert("path","g").attr("class","link")
+    .attr("d",()=>{var o={x:src.x0,y:src.y0};return diag(o,o);})
+    .style("stroke",d=>nBorder(d));
+  le.merge(link).transition().duration(dur).attr("d",d=>diag(d,d.parent));
+  link.exit().transition().duration(dur)
+    .attr("d",()=>{var o={x:src.x,y:src.y};return diag(o,o);}).remove();
+  nodes.forEach(d=>{d.x0=d.x;d.y0=d.y;});
+}
+function diag(s,d){
+  return"M"+s.y+" "+s.x+" C"+(s.y+d.y)/2+" "+s.x+","+(s.y+d.y)/2+" "+d.x+","+d.y+" "+d.x;
+}
+function click(e,d){
+  if(d.children){d._children=d.children;d.children=null;}
+  else{d.children=d._children;d._children=null;}
+  update(d);
+}
+</script>"""
+    components.html(_html, height=1000, scrolling=False)
 
-        if "From Review Input URLs" in rev["Input Sources"]:
-            rev["Sample Review URLs"] = st.text_area(
-                "Sample Review URLs (for testing)",
-                placeholder="Provide product review page URLs"
-            )
 
-        st.markdown("**Frequency**")
-        freq, hourly = frequency_selector("Reviews Crawl", "rev")
-        rev["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
-        
-        if hourly:
-            rev["Hourly Timings"] = st.text_input(
-                "Specify timing if hourly",
-                placeholder="Example: 8 AM, 12 PM, 6 PM, 10 PM"
-            )
 
-        form_data["Reviews"] = rev
 
-        st.markdown("---")
 
-    # 6. PRICE VIOLATION MODULE
-    if "Price Violation" in modules:
-        st.header("6. PRICE VIOLATION MODULE")
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTER
+# ─────────────────────────────────────────────────────────────────────────────
 
-        pv = {}
-        
-        pv["Domains"] = domain_selector("Select Domains", "pv")
+page = st.session_state["page"]
 
-        st.markdown("**Frequency**")
-        freq, hourly = frequency_selector("Price Violation Crawl", "pv")
-        pv["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
-
-        st.markdown("**Inputs**")
-        pv["Product URL List"] = st.text_area(
-            "Product URL List",
-            placeholder="Provide sample product URLs to monitor"
-        )
-        
-        pv["Zipcode Required"] = st.radio(
-            "Zipcode required?",
-            ["Yes", "No"],
-            horizontal=True,
-            key="pv_zipcode_required"
-        )
-        if pv["Zipcode Required"] == "Yes":
-            pv["Zipcode List"] = st.text_area(
-                "Zipcode List",
-                placeholder="e.g., 110001, 560001, 400001"
-            )
-        
-        pv["Price Violation Condition"] = st.text_area(
-            "Price Violation Condition",
-            placeholder="Example: MRP > X, Discount < Y%, Below competitor price, Price difference > 15%"
-        )
-
-        st.markdown("**Sample Inputs / Testing Data**")
-        pv["Sample Inputs Sheet Link"] = st.text_input(
-            "Sample Inputs Sheet Link (if available)",
-            placeholder="Link to sample product data"
-        )
-        
-        pv["Screenshot Required"] = st.radio(
-            "Is Screenshot Required?",
-            ["Yes", "No"],
-            key="pv_screenshot"
-        )
-
-        form_data["Price Violation"] = pv
-
-        st.markdown("---")
-
-    # 7. STORE ID CRAWL
-    if "Store ID Crawls" in modules:
-        st.header("7. STORE ID CRAWL")
-
-        storeid = {}
-        
-        storeid["Domains"] = domain_selector("Select Domains", "storeid")
-        
-        st.markdown("**Specific Store Locations**")
-        storeid["Specific Location Required"] = st.radio(
-            "Any specific store locations?",
-            ["No", "Yes"],
-            horizontal=True,
-            key="storeid_location"
-        )
-        if storeid["Specific Location Required"] == "Yes":
-            storeid["Location Details"] = st.text_area(
-                "Specify location details",
-                placeholder="e.g., Bangalore, Mumbai, Delhi"
-            )
-
-        st.markdown("**Store ID List**")
-        storeid_status = st.radio(
-            "Specific Pincode available?",
-            ["Yes", "No"],
-            key="storeid_list_status"
-        )
-        if storeid_status == "Yes":
-            storeid["Specific Pincode List Link"] = st.text_input(
-                "Attach Link"
-            )
-
-        form_data["Store ID Crawls"] = storeid
-
-        st.markdown("---")
-
-    # 8. FESTIVE SALE CRAWLS
-    if "Festive Sale Crawls" in modules:
-        st.header("8. FESTIVE SALE CRAWLS")
-
-        festive = {}
-        
-        st.markdown("**Crawl Type**")
-        festive["Crawl Type"] = st.radio(
-            "Select crawl type",
-            [
-                "Products + Trends Based",
-                "SOS Type",
-                "Category URL Based"
-            ],
-            key="festive_type",
-            label_visibility="collapsed"
-        )
-
-        if festive["Crawl Type"] == "Products + Trends Based":
-            festive["Domains"] = domain_selector("Select Domains", "festive")
-        elif festive["Crawl Type"] == "Category URL Based":
-            festive["Category URL List"] = st.text_area(
-                "Category URL List",
-                placeholder="Provide category URLs for festive crawl"
-            )
-
-        st.markdown("**Schedule**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            festive["Frequency Per Day"] = st.number_input(
-                "Frequency per Day",
-                min_value=1,
-                value=1,
-                key="festive_freq"
-            )
-        with col2:
-            festive["Start Date"] = st.date_input(
-                "Start Date",
-                key="festive_start"
-            )
-        with col3:
-            festive["End Date"] = st.date_input(
-                "End Date",
-                key="festive_end"
-            )
-
-        form_data["Festive Sale Crawls"] = festive
-
-        st.markdown("---")
-
-    # 9. FINAL ALIGNMENT
-    st.header("9. FINAL ALIGNMENT")
-
-    form_data["Final Alignment"] = {
-        "Client Core Objective": st.text_area(
-            "What is the Client's Core Objective?",
-            placeholder="Example: Market gap analysis, brand monitoring, competitive pricing intelligence, inventory visibility, demand trends, etc.",
-            key="final_objective"
-        ),
-        "Expectations From Us": st.text_area(
-            "What Are You Expecting From Us?",
-            placeholder="Example: Real-time dashboards, daily reports, anomaly alerts, historical insights, competitive benchmarking, etc.",
-            key="final_expectation"
-        )
-    }
-
-    st.markdown("---")
-
-    # 10. COMMENTS / NOTES
-    st.header("10. Comments / Notes")
-
-    form_data["Comments & Notes"] = {
-        "Additional Comments": st.text_area(
-            "Add any additional notes or comments",
-            placeholder="Any other important details or special instructions...",
-            key="final_comments"
-        )
-    }
-
-    st.divider()
-
-    if st.button("Generate and Download PDF"):
-        pdf = generate_pdf(form_data)
-        st.download_button(
-            label="Download Requirement PDF",
-            data=pdf,
-            file_name=f"{client_name}_Requirement_Form.pdf",
-            mime="application/pdf"
-        )
-
-# -------------------------------------------------
-# RIGHT PANEL (LIVE SUMMARY)
-# -------------------------------------------------
-
-with right:
-    render_summary(form_data)
+if page == "main":
+    render_main_form()
+elif page == "feasibility":
+    render_feasibility()
+elif page == "req_flow":
+    render_req_flow()
+elif page == "ops_map":
+    render_ops_map()
+elif page == "poc_guide":
+    render_poc_guide()
