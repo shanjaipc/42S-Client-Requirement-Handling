@@ -47,46 +47,6 @@ if os.path.exists(LOGO_PATH):
 )
 
 # -------------------------------------------------
-# SIDEBAR NAVIGATION
-# -------------------------------------------------
-
-with st.sidebar:
-    st.markdown("### 🏢 Pages")
-    st.markdown("---")
-    
-    # Multi-page navigation
-    st.page_link("app.py", label="📋 Main Requirement Form", icon="📋")
-    st.page_link("pages/1_Feasibility_Requirement.py", label="📊 Feasibility Assessment", icon="📊")
-    st.page_link("pages/2_Decision_Mind_Map.py", label="🧠 Decision Mind Map", icon="🧠")
-    
-    st.markdown("---")
-    st.markdown("### Quick Actions")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📥 Clear Form", use_container_width=True):
-            st.session_state.clear()
-            st.rerun()
-    
-    with col2:
-        if st.button("💾 Save Draft", use_container_width=True):
-            st.info("Draft saved locally", icon="✓")
-    
-    st.markdown("---")
-    st.markdown("### Help & Info")
-    with st.expander("📚 How to use this form?"):
-        st.markdown("""
-        1. **Fill Client Information** - Start with basic details
-        2. **Select Modules** - Choose which modules you need
-        3. **Configure Each Module** - Set up specific requirements
-        4. **Review Summary** - Check the live summary section
-        5. **Download PDF** - Export your requirement as PDF
-        """)
-    
-    st.markdown("---")
-    st.caption("Version 1.0 | Last Updated: Feb 2026")
-
-# -------------------------------------------------
 # UTILITIES
 # -------------------------------------------------
 
