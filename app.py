@@ -24,9 +24,15 @@ from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
+try:
+    from PIL import Image as _PIL_Image
+    _page_icon = _PIL_Image.open("42slogo_top.png") if os.path.exists("42slogo_top.png") else "🔍"
+except Exception:
+    _page_icon = "🔍"
+
 st.set_page_config(
     page_title="42Signals | Requirement Handling",
-    page_icon="🔍",
+    page_icon=_page_icon,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -157,23 +163,34 @@ section[data-testid="stSidebar"] hr {
 section[data-testid="stSidebar"] .stButton > button {
     background: transparent !important;
     border: 1px solid transparent !important;
-    color: #6b7280 !important;
-    text-align: left;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.18s ease;
+    border-radius: 8px !important;
+    padding: 9px 12px !important;
+    font-size: 0.83rem !important;
+    font-weight: 500 !important;
+    color: #4b5563 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     box-shadow: none !important;
-    width: 100%;
+    letter-spacing: 0 !important;
+    transition: background .15s ease, color .15s ease !important;
+    margin-bottom: 1px !important;
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: #f8fafc !important;
-    border-color: #e5e7eb !important;
-    color: #111827 !important;
-    transform: translateX(2px);
+    background: #f1f5f9 !important;
+    color: #1f2937 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
 }
-section[data-testid="stSidebar"] .stButton > button:focus {
+section[data-testid="stSidebar"] .stButton > button:active {
+    background: #e8ecf0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+section[data-testid="stSidebar"] .stButton > button:focus:not(:active) {
     box-shadow: none !important;
     outline: none !important;
 }
@@ -907,38 +924,39 @@ with st.sidebar:
     # Section label
     st.markdown('<div style="color:#b0b7c3;font-size:0.67rem;text-transform:uppercase;letter-spacing:0.14em;padding:0 6px 10px 6px;font-weight:600;font-family:\'Inter\',sans-serif;">Navigation</div>', unsafe_allow_html=True)
 
-    # Nav items
-    pages = {
-        "main":        ("📋", "New Requirement Form"),
-        "feasibility": ("📊", "Feasibility Assessment"),
-        "req_flow":    ("🔀", "New Requirement Flow"),
-        "ops_map":     ("🗺️", "Day-to-Day Ops Map"),
-        "poc_guide":   ("👤", "Task POC Guide"),
+    # Nav items — SVG icons, consistent active/inactive styling
+    _NAV = {
+        "main": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
+            "New Requirement Form",
+        ),
+        "feasibility": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
+            "Feasibility Assessment",
+        ),
+        "req_flow": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 12h9"/><path d="M14.5 9l3 3-3 3"/></svg>',
+            "New Requirement Flow",
+        ),
+        "ops_map": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+            "Day-to-Day Ops Map",
+        ),
+        "poc_guide": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+            "Task POC Guide",
+        ),
     }
 
-    for key, (icon, label) in pages.items():
-        if st.session_state["page"] == key:
-            st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, #f1f5f9 0%, #e8ecf0 100%);
-                border: 1px solid #dde3ea;
-                border-left: 3px solid #1f2937;
-                border-radius: 9px;
-                padding: 10px 14px;
-                color: #111827;
-                font-size: 0.875rem;
-                font-weight: 600;
-                margin-bottom: 4px;
-                display: flex;
-                align-items: center;
-                gap: 9px;
-                cursor: default;
-                font-family: 'Inter', sans-serif;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            ">{icon}&ensp;{label}</div>
-            """, unsafe_allow_html=True)
+    for key, (svg, label) in _NAV.items():
+        active = st.session_state["page"] == key
+        if active:
+            st.markdown(
+                f"""<div style="background:linear-gradient(135deg,#f1f5f9 0%,#e8ecf0 100%);border:1px solid #dde3ea;border-left:3px solid #1f2937;border-radius:8px;padding:9px 12px;color:#111827;font-size:0.83rem;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:9px;font-family:'Inter',sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);">{svg}&nbsp;{label}</div>""",
+                unsafe_allow_html=True,
+            )
         else:
-            if st.button(f"{icon}\u2002{label}", key=f"nav_{key}", use_container_width=True):
+            if st.button(label, key=f"nav_{key}", use_container_width=True):
                 st.session_state["page"] = key
                 st.rerun()
 
@@ -967,7 +985,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("⎋  Sign Out", key="logout_btn", use_container_width=True):
+    if st.button("Sign Out", key="logout_btn", use_container_width=True):
         _clear_session()
         st.session_state["authenticated"]   = False
         st.session_state["current_user"]    = None
