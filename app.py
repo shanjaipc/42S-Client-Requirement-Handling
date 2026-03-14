@@ -11,6 +11,7 @@ from docx import Document
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 import os
+import csv
 import base64
 import html as _html_mod
 import re
@@ -45,7 +46,7 @@ _D3_PATH = Path("d3.v7.min.js")
 _D3_INLINE = (
     f"<script>{_D3_PATH.read_text()}</script>"
     if _D3_PATH.exists()
-    else '{_D3_INLINE}'
+    else '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>'
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +74,46 @@ def _safe_filename(name: str, suffix: str = "") -> str:
 
 _SESSION_FILE = Path(".42s_session.json")
 _SESSION_TTL_DAYS = 7
+
+# ── Server-side lockout (per username, survives new tabs / refreshes) ─────────
+_LOCKOUT_FILE = Path(".42s_lockout.json")
+
+
+def _get_lockout(username: str) -> tuple:
+    """Return (attempts, lockout_until_timestamp) for a username."""
+    try:
+        if not _LOCKOUT_FILE.exists():
+            return 0, 0.0
+        data = json.loads(_LOCKOUT_FILE.read_text())
+        rec = data.get(username.strip().lower(), {})
+        return int(rec.get("attempts", 0)), float(rec.get("lockout_until", 0.0))
+    except (OSError, KeyError, ValueError):
+        return 0, 0.0
+
+
+def _set_lockout(username: str, attempts: int, lockout_until: float) -> None:
+    try:
+        data = {}
+        if _LOCKOUT_FILE.exists():
+            try:
+                data = json.loads(_LOCKOUT_FILE.read_text())
+            except (ValueError, OSError):
+                data = {}
+        data[username.strip().lower()] = {"attempts": attempts, "lockout_until": lockout_until}
+        _LOCKOUT_FILE.write_text(json.dumps(data))
+    except OSError:
+        pass
+
+
+def _clear_lockout(username: str) -> None:
+    try:
+        if not _LOCKOUT_FILE.exists():
+            return
+        data = json.loads(_LOCKOUT_FILE.read_text())
+        data.pop(username.strip().lower(), None)
+        _LOCKOUT_FILE.write_text(json.dumps(data))
+    except (OSError, ValueError):
+        pass
 
 
 def _save_session(username: str, display_name: str) -> None:
@@ -364,8 +405,10 @@ if "page"             not in st.session_state: st.session_state["page"]         
 if "authenticated"    not in st.session_state: st.session_state["authenticated"]    = False
 if "current_user"     not in st.session_state: st.session_state["current_user"]     = None
 if "display_name"     not in st.session_state: st.session_state["display_name"]     = None
-if "failed_attempts"  not in st.session_state: st.session_state["failed_attempts"]  = 0
-if "lockout_until"    not in st.session_state: st.session_state["lockout_until"]    = 0.0
+if "failed_attempts"        not in st.session_state: st.session_state["failed_attempts"]        = 0
+if "lockout_until"          not in st.session_state: st.session_state["lockout_until"]          = 0.0
+if "login_username_preview" not in st.session_state: st.session_state["login_username_preview"] = ""
+if "cc_show_results"        not in st.session_state: st.session_state["cc_show_results"]        = False
 
 # Auto-restore session from disk on first load (persistent login)
 if not st.session_state["authenticated"]:
@@ -492,13 +535,13 @@ def calculate_risk(freq_string, volume_string):
         try:
             times = int(freq_string.split("(")[1].split()[0])
             freq_score = 3 if times > 6 else 2
-        except:
+        except (IndexError, ValueError):
             freq_score = 2
     vol_score = 1
     try:
         volume = int(str(volume_string).replace(",", ""))
         vol_score = 1 if volume <= 10_000 else (2 if volume <= 50_000 else 3)
-    except:
+    except ValueError:
         pass
     total = freq_score + vol_score
     return "LOW" if total <= 2 else ("MODERATE" if total <= 4 else "CRITICAL")
@@ -824,10 +867,17 @@ def render_login():
 </div>
 </div>""", unsafe_allow_html=True)
 
-    # ── Lockout check ────────────────────────────────────────────────────
+    # ── Lockout check (server-side — persists across tabs) ───────────────
+    # We need a username to check server-side lockout, so show the field first
+    # for the lockout lookup. We re-read it after form submission too.
+    _preview_user = st.session_state.get("login_username_preview", "")
+
     now = time.time()
-    locked    = st.session_state["lockout_until"] > now
-    remaining = int(st.session_state["lockout_until"] - now)
+    _srv_attempts, _srv_lockout_until = _get_lockout(_preview_user) if _preview_user else (0, 0.0)
+    # Also check session-state lockout (covers anonymous pre-username-entry state)
+    _ss_lockout = st.session_state["lockout_until"]
+    locked    = (_srv_lockout_until > now) or (_ss_lockout > now)
+    remaining = int(max(_srv_lockout_until, _ss_lockout) - now)
 
     if locked:
         st.markdown(f"""<div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:12px;padding:15px 18px;margin-bottom:4px;color:#7f1d1d;font-family:'Inter',sans-serif;font-size:.875rem;display:flex;align-items:center;gap:12px;">
@@ -836,51 +886,68 @@ def render_login():
 <div style="opacity:.8;">Too many failed attempts.<br>Try again in <strong>{remaining // 60}m {remaining % 60}s</strong>.</div>
 </div></div>""", unsafe_allow_html=True)
         st.markdown("""<div style="text-align:center;padding:20px 0 6px 0;font-size:.72rem;color:#94a3b8;font-family:'Inter',sans-serif;">Access restricted to authorised users only &middot; 42Signals &copy; 2026</div>""", unsafe_allow_html=True)
-        return
+        # Auto-refresh every second so the countdown ticks live
+        time.sleep(1)
+        st.rerun()
 
-    # ── Form fields ──────────────────────────────────────────────────────
-    username = st.text_input(
-        "Username",
-        placeholder="e.g. shanjai",
-        key="login_username",
-        autocomplete="username",
-    )
-    password = st.text_input(
-        "Password",
-        type="password",
-        placeholder="••••••••••",
-        key="login_password",
-        autocomplete="current-password",
-    )
+    # ── Form (st.form enables Enter-to-submit) ────────────────────────────
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input(
+            "Username",
+            placeholder="e.g. shanjai",
+            key="login_username",
+            autocomplete="username",
+        )
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="••••••••••",
+            key="login_password",
+            autocomplete="current-password",
+        )
 
-    # Failed-attempt inline alert
-    if st.session_state["failed_attempts"] > 0:
-        left = MAX_ATTEMPTS - st.session_state["failed_attempts"]
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#fffbeb,#fef9ec);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:11px 15px;color:#78350f;font-size:.82rem;margin-top:4px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:9px;">
+        # Failed-attempt inline alert (inside form so it's visible before submit)
+        attempts = st.session_state["failed_attempts"]
+        if attempts > 0:
+            left = MAX_ATTEMPTS - attempts
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#fffbeb,#fef9ec);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:11px 15px;color:#78350f;font-size:.82rem;margin-top:4px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:9px;">
 <span style="font-size:1rem;flex-shrink:0;">&#9888;&#65039;</span>
 <span>Incorrect credentials &mdash; <strong>{left} attempt{'s' if left != 1 else ''}</strong> left before lockout.</span>
 </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+        submitted = st.form_submit_button("Sign In  →", type="primary", use_container_width=True)
 
-    if st.button("Sign In  →", type="primary", use_container_width=True, key="login_submit"):
-        if not username or not password:
+    if submitted:
+        clean_user = username.strip().lower()
+        # Store username preview for server-side lockout lookup on next render
+        st.session_state["login_username_preview"] = clean_user
+        # Re-check server-side lockout for this specific username
+        _srv_attempts, _srv_lockout_until = _get_lockout(clean_user)
+        if _srv_lockout_until > time.time():
+            st.rerun()
+        elif not username or not password:
             st.warning("Please enter both username and password.")
         elif verify_password(username, password):
             user = get_user(username)
-            clean_user = username.strip().lower()
+            display_name = user["display_name"] if user else clean_user
             st.session_state["authenticated"]   = True
             st.session_state["current_user"]    = clean_user
-            st.session_state["display_name"]    = user["display_name"]
+            st.session_state["display_name"]    = display_name
             st.session_state["failed_attempts"] = 0
             st.session_state["lockout_until"]   = 0.0
-            _save_session(clean_user, user["display_name"])
+            _clear_lockout(clean_user)
+            _save_session(clean_user, display_name)
             st.rerun()
         else:
-            st.session_state["failed_attempts"] += 1
-            if st.session_state["failed_attempts"] >= MAX_ATTEMPTS:
-                st.session_state["lockout_until"] = time.time() + LOCKOUT_SECONDS
+            new_attempts = _srv_attempts + 1
+            if new_attempts >= MAX_ATTEMPTS:
+                _set_lockout(clean_user, 0, time.time() + LOCKOUT_SECONDS)
+                st.session_state["lockout_until"]   = time.time() + LOCKOUT_SECONDS
                 st.session_state["failed_attempts"] = 0
+            else:
+                _set_lockout(clean_user, new_attempts, 0.0)
+                st.session_state["failed_attempts"] = new_attempts
             st.rerun()
 
     # ── Card footer ──────────────────────────────────────────────────────
@@ -945,6 +1012,10 @@ with st.sidebar:
         "poc_guide": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
             "Task POC Guide",
+        ),
+        "cost_calc": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h2m4 0h3M7 12h2m4 0h3M7 16h2m4 0h3"/></svg>',
+            "Cost Calculator",
         ),
     }
 
@@ -2231,6 +2302,457 @@ function click(e,d){
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# COST CALCULATOR
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generate_cost_pdf(results, grand_total, selected_domains, platform_display, crawl_icons):
+    """Build a formatted PDF cost estimate using ReportLab."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=pagesizes.A4,
+        topMargin=0.5*inch, bottomMargin=0.6*inch,
+        leftMargin=0.6*inch, rightMargin=0.6*inch,
+    )
+    styles = getSampleStyleSheet()
+    el = []
+
+    title_s = ParagraphStyle("CCT", parent=styles["Heading1"], fontSize=18,
+                              textColor=HexColor("#1f2937"), alignment=TA_CENTER,
+                              fontName="Helvetica-Bold", spaceAfter=3)
+    sub_s   = ParagraphStyle("CCS", parent=styles["Normal"], fontSize=9,
+                              textColor=HexColor("#6b7280"), alignment=TA_CENTER, spaceAfter=12)
+    sec_s   = ParagraphStyle("CCH", parent=styles["Normal"], fontSize=10,
+                              textColor=HexColor("#ffffff"), backColor=HexColor("#1f2937"),
+                              fontName="Helvetica-Bold", leftIndent=8, spaceBefore=10, spaceAfter=4)
+    th_s    = ParagraphStyle("CCTH", parent=styles["Normal"], fontSize=7.5,
+                              textColor=HexColor("#ffffff"), fontName="Helvetica-Bold")
+    td_s    = ParagraphStyle("CCTD", parent=styles["Normal"], fontSize=8, textColor=HexColor("#111827"))
+    tdr_s   = ParagraphStyle("CCTDR", parent=styles["Normal"], fontSize=8,
+                              textColor=HexColor("#111827"), alignment=1)
+    cost_s  = ParagraphStyle("CCCS", parent=styles["Normal"], fontSize=8,
+                              textColor=HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=2)
+    note_s  = ParagraphStyle("CCN", parent=styles["Normal"], fontSize=7.5,
+                              textColor=HexColor("#9ca3af"), alignment=TA_CENTER, spaceAfter=6)
+
+    try:
+        if os.path.exists(LOGO_PATH):
+            logo = Image(LOGO_PATH, width=0.9*inch, height=0.72*inch)
+            hdr_tbl = Table([[logo, Paragraph("<b>Crawl Cost Estimate</b>", title_s)]],
+                            colWidths=[1.1*inch, 5.9*inch])
+            hdr_tbl.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            el.append(hdr_tbl)
+        else:
+            el.append(Paragraph("<b>Crawl Cost Estimate</b>", title_s))
+    except Exception:
+        el.append(Paragraph("<b>Crawl Cost Estimate</b>", title_s))
+
+    el.append(Paragraph(
+        f"Generated: {date.today().strftime('%d %b %Y')} &nbsp;|&nbsp; "
+        f"Grand Total: <b>${grand_total:,.4f}</b>",
+        sub_s
+    ))
+    el.append(Spacer(1, 0.1*inch))
+
+    col_widths = [1.8*inch, 0.85*inch, 0.6*inch, 0.5*inch, 0.65*inch, 0.8*inch, 0.8*inch]
+    for domain in selected_domains:
+        domain_results = [r for r in results if r["domain"] == domain]
+        if not domain_results:
+            continue
+        display_name = platform_display.get(domain, domain)
+        domain_total = sum(r["total_cost"] for r in domain_results)
+
+        el.append(Paragraph(
+            f"  {_html_mod.escape(display_name)} ({_html_mod.escape(domain)})", sec_s
+        ))
+        el.append(Spacer(1, 0.04*inch))
+
+        header_row = [
+            Paragraph("Crawl Type", th_s), Paragraph("Volume/Crawl", th_s),
+            Paragraph("Freq", th_s),       Paragraph("Days", th_s),
+            Paragraph("Zipcode", th_s),    Paragraph("Cost/Crawl", th_s),
+            Paragraph("Total Cost", th_s),
+        ]
+        table_rows = [header_row]
+        for r in domain_results:
+            ct_icon = crawl_icons.get(r["crawl_type"], "")
+            table_rows.append([
+                Paragraph(_html_mod.escape(f"{ct_icon} {r['crawl_type']}"), td_s),
+                Paragraph(f"{r['volume_per_crawl']:,}", tdr_s),
+                Paragraph(f"{r['freq']}x/d", tdr_s),
+                Paragraph(str(r["days"]), tdr_s),
+                Paragraph(r["zip_mode"].replace(" Zipcode", ""), tdr_s),
+                Paragraph(f"${r['cost_per_crawl']:,.4f}", cost_s),
+                Paragraph(f"${r['total_cost']:,.4f}", cost_s),
+            ])
+        table_rows.append([
+            Paragraph("<b>Subtotal</b>", td_s),
+            Paragraph("", td_s), Paragraph("", td_s), Paragraph("", td_s),
+            Paragraph("", td_s), Paragraph("", td_s),
+            Paragraph(f"<b>${domain_total:,.4f}</b>", cost_s),
+        ])
+
+        t = Table(table_rows, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  HexColor("#1f2937")),
+            ("GRID",          (0, 0), (-1, -1), 0.4, HexColor("#e5e7eb")),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -2), [HexColor("#ffffff"), HexColor("#f9fafb")]),
+            ("BACKGROUND",    (0, -1), (-1, -1), HexColor("#f1f5f9")),
+        ]))
+        el.append(t)
+        el.append(Spacer(1, 0.15*inch))
+
+    gt_data = [["", "", "", "", "", "",
+                Paragraph(f"<b>Grand Total: ${grand_total:,.4f}</b>", cost_s)]]
+    gt = Table(gt_data, colWidths=col_widths)
+    gt.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), HexColor("#1f2937")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+    ]))
+    el.append(gt)
+    el.append(Spacer(1, 0.12*inch))
+    el.append(Paragraph(
+        "Rates are benchmarks derived from internal crawl cost data. Actual costs may vary.",
+        note_s
+    ))
+    doc.build(el)
+    buffer.seek(0)
+    return buffer.read()
+
+
+def render_cost_calculator():
+    page_title(
+        "Cost Calculator",
+        "Select platforms, configure crawl types per domain, and get a detailed cost estimate with PDF/CSV download."
+    )
+
+    # ── Load domain/rate config from CSV ──────────────────────────────────────
+    _RATES_CSV = Path("crawl_cost_rates.csv")
+
+    if not _RATES_CSV.exists():
+        st.error("crawl_cost_rates.csv not found. Please add it next to app.py.")
+        return
+
+    PLATFORM_LIST, PLATFORM_DISPLAY, RATES = [], {}, {}
+    try:
+        with open(_RATES_CSV, newline="") as _fh:
+            for _row in csv.DictReader(_fh):
+                _d   = _row["domain"].strip()
+                _zip = _row["zipcode"].strip().lower() == "true"
+                _key = "with" if _zip else "without"
+                if _d not in RATES:
+                    PLATFORM_LIST.append(_d)
+                    PLATFORM_DISPLAY[_d] = _row["display_name"].strip()
+                    RATES[_d] = {}
+                RATES[_d][_key] = {
+                    "sku": float(_row["sku_rate"]),
+                    "cat": float(_row["cat_rate"]),
+                    "kw":  float(_row["kw_rate"]),
+                }
+    except KeyError as e:
+        st.error(f"crawl_cost_rates.csv is missing column: {e}. Expected columns: domain, display_name, zipcode, sku_rate, cat_rate, kw_rate")
+        return
+    except ValueError as e:
+        st.error(f"crawl_cost_rates.csv contains an invalid number: {e}")
+        return
+    except Exception as e:
+        st.error(f"Failed to load crawl_cost_rates.csv: {e}")
+        return
+
+    CRAWL_TYPES = [
+        "Category Based", "SKU / Product URL Based", "SOS (Share of Search)",
+        "Reviews", "Keyword Level", "Festive Sales Day Crawl", "Banner Crawl",
+    ]
+    CRAWL_ICONS = {
+        "Category Based": "🗂️", "SKU / Product URL Based": "📦",
+        "SOS (Share of Search)": "🔍", "Reviews": "⭐",
+        "Keyword Level": "🔑", "Festive Sales Day Crawl": "🎉", "Banner Crawl": "🖼️",
+    }
+    CRAWL_DESC = {
+        "Category Based":          "Browse category pages with pagination",
+        "SKU / Product URL Based": "Direct product URL / API fetch",
+        "SOS (Share of Search)":   "Search result pages crawled by keyword",
+        "Reviews":                 "Product review page crawling",
+        "Keyword Level":           "Keyword-based search result crawling",
+        "Festive Sales Day Crawl": "High-freq category crawl for sale events (1.2× rate)",
+        "Banner Crawl":            "Promotional / banner URL monitoring ($0.001/URL/crawl)",
+    }
+
+    def get_rate(domain, crawl_type, with_zip):
+        key = "with" if with_zip else "without"
+        r = RATES.get(domain, {}).get(key, RATES.get(domain, {}).get("without", {}))
+        if crawl_type == "Category Based":           return r.get("cat", 0.0)
+        if crawl_type == "Festive Sales Day Crawl":  return r.get("cat", 0.0) * 1.2
+        if crawl_type == "SKU / Product URL Based":  return r.get("sku", 0.0)
+        if crawl_type == "Reviews":                  return r.get("sku", 0.0) * 0.7
+        if crawl_type in ("SOS (Share of Search)", "Keyword Level"): return r.get("kw", 0.0)
+        if crawl_type == "Banner Crawl":             return 0.001
+        return 0.0
+
+    def compute_volume(crawl_type, a, b):
+        if crawl_type in ("Category Based", "Festive Sales Day Crawl"): return a * b
+        if crawl_type == "SKU / Product URL Based":  return a
+        if crawl_type == "Reviews":                  return a
+        if crawl_type in ("SOS (Share of Search)", "Keyword Level"): return a * b
+        if crawl_type == "Banner Crawl":             return a
+        return 0
+
+    def _cost_cell(val):
+        if val == 0:      return '<span style="color:#16a34a;font-weight:700;">$0.00</span>'
+        if val < 1:       return f'<span style="color:#ca8a04;font-weight:700;">${val:.4f}</span>'
+        if val < 100:     return f'<span style="color:#ea580c;font-weight:700;">${val:,.4f}</span>'
+        return f'<span style="color:#dc2626;font-weight:700;">${val:,.4f}</span>'
+
+    # ── Step 1: Platform Selection ────────────────────────────────────────────
+    section_header("🌐", "Step 1 — Select Platforms")
+    selected_domains = st.multiselect(
+        "Choose platforms to include in this estimate",
+        options=PLATFORM_LIST,
+        format_func=lambda x: PLATFORM_DISPLAY.get(x, x),
+        key="cc_selected_domains",
+        placeholder="Select one or more platforms...",
+    )
+
+    if not selected_domains:
+        st.markdown("""
+        <div style="text-align:center;padding:56px 20px;color:#94a3b8;font-family:'Inter',sans-serif;
+        background:white;border-radius:14px;border:2px dashed #e5e7eb;margin-top:20px;">
+            <div style="font-size:2.8rem;margin-bottom:14px;">📊</div>
+            <div style="font-size:1rem;font-weight:600;color:#374151;">Select platforms above to begin</div>
+            <div style="font-size:0.82rem;margin-top:6px;">
+                Choose one or more platforms, configure crawl types for each,<br>then click Generate.
+            </div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    # ── Step 2: Per-Domain Configuration ─────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_header("⚙️", "Step 2 — Configure Crawl Types")
+
+    for domain in selected_domains:
+        display_name = PLATFORM_DISPLAY.get(domain, domain)
+
+        with st.expander(f"**{display_name}**  ·  {domain}", expanded=True):
+            col_ct, col_zip = st.columns([3, 1])
+            with col_ct:
+                selected_cts = st.multiselect(
+                    "Crawl types",
+                    options=CRAWL_TYPES,
+                    format_func=lambda x: f"{CRAWL_ICONS.get(x, '')}  {x}",
+                    key=f"cc_ct_{domain}",
+                    placeholder="Select crawl type(s)...",
+                )
+            with col_zip:
+                st.radio("Zipcode", ["Without Zipcode", "With Zipcode", "Both"],
+                         key=f"cc_zip_{domain}")
+
+            if not selected_cts:
+                st.caption("No crawl types selected for this platform.")
+                continue
+
+            for ct in selected_cts:
+                st.markdown(
+                    f'<div style="font-size:0.82rem;font-weight:600;color:#374151;'
+                    f'margin:14px 0 6px 0;font-family:\'Inter\',sans-serif;">'
+                    f'{CRAWL_ICONS.get(ct, "")} {ct}'
+                    f'<span style="font-size:0.72rem;color:#9ca3af;font-weight:400;'
+                    f'margin-left:8px;">— {CRAWL_DESC.get(ct, "")}</span></div>',
+                    unsafe_allow_html=True,
+                )
+                if ct in ("Category Based", "Festive Sales Day Crawl"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1: st.number_input("Category URLs",   min_value=1, value=100, step=10, key=f"cc_{domain}_{ct}_a")
+                    with c2: st.number_input("SKUs/Category",   min_value=1, value=50,  step=5,  key=f"cc_{domain}_{ct}_b")
+                    with c3: st.number_input("Crawls/day",      min_value=1, value=1,   step=1,  key=f"cc_{domain}_{ct}_c")
+                    with c4: st.number_input("Duration (days)", min_value=1, value=30,  step=1,  key=f"cc_{domain}_{ct}_d")
+                elif ct == "SKU / Product URL Based":
+                    c1, c2, c3 = st.columns(3)
+                    with c1: st.number_input("Number of SKUs",  min_value=1, value=1000, step=100, key=f"cc_{domain}_{ct}_a")
+                    with c2: st.number_input("Crawls/day",      min_value=1, value=1,    step=1,   key=f"cc_{domain}_{ct}_c")
+                    with c3: st.number_input("Duration (days)", min_value=1, value=30,   step=1,   key=f"cc_{domain}_{ct}_d")
+                elif ct == "Reviews":
+                    c1, c2, c3 = st.columns(3)
+                    with c1: st.number_input("Number of Products", min_value=1, value=500, step=50, key=f"cc_{domain}_{ct}_a")
+                    with c2: st.number_input("Crawls/day",         min_value=1, value=1,   step=1,  key=f"cc_{domain}_{ct}_c")
+                    with c3: st.number_input("Duration (days)",    min_value=1, value=30,  step=1,  key=f"cc_{domain}_{ct}_d")
+                elif ct in ("SOS (Share of Search)", "Keyword Level"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1: st.number_input("Keywords",          min_value=1, value=200, step=10, key=f"cc_{domain}_{ct}_a")
+                    with c2: st.number_input("SKUs/Keyword",      min_value=1, value=60,  step=5,  key=f"cc_{domain}_{ct}_b")
+                    with c3: st.number_input("Crawls/day",        min_value=1, value=1,   step=1,  key=f"cc_{domain}_{ct}_c")
+                    with c4: st.number_input("Duration (days)",   min_value=1, value=30,  step=1,  key=f"cc_{domain}_{ct}_d")
+                elif ct == "Banner Crawl":
+                    c1, c2, c3 = st.columns(3)
+                    with c1: st.number_input("Banner URLs",       min_value=1, value=20,  step=5,  key=f"cc_{domain}_{ct}_a")
+                    with c2: st.number_input("Crawls/day",        min_value=1, value=1,   step=1,  key=f"cc_{domain}_{ct}_c")
+                    with c3: st.number_input("Duration (days)",   min_value=1, value=30,  step=1,  key=f"cc_{domain}_{ct}_d")
+                st.markdown('<div style="height:1px;background:#f1f5f9;margin:6px 0 2px 0;"></div>',
+                            unsafe_allow_html=True)
+
+    # ── Generate button ───────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    _, btn_col, _ = st.columns([2, 1, 2])
+    with btn_col:
+        if st.button("📊  Generate Estimate", use_container_width=True, type="primary"):
+            st.session_state["cc_show_results"] = True
+
+    if not st.session_state.get("cc_show_results"):
+        return
+
+    # ── Compute results ───────────────────────────────────────────────────────
+    results = []
+    for domain in selected_domains:
+        display_name = PLATFORM_DISPLAY.get(domain, domain)
+        selected_cts = st.session_state.get(f"cc_ct_{domain}", [])
+        zip_mode = st.session_state.get(f"cc_zip_{domain}", "Without Zipcode")
+        zip_variants = (
+            [("Without Zipcode", False), ("With Zipcode", True)]
+            if zip_mode == "Both"
+            else [(zip_mode, zip_mode == "With Zipcode")]
+        )
+
+        for ct in selected_cts:
+            a  = st.session_state.get(f"cc_{domain}_{ct}_a", 0)
+            b  = st.session_state.get(f"cc_{domain}_{ct}_b", 0)
+            c_ = st.session_state.get(f"cc_{domain}_{ct}_c", 1)
+            d  = st.session_state.get(f"cc_{domain}_{ct}_d", 30)
+            volume = compute_volume(ct, a, b)
+            for zm, wz in zip_variants:
+                rate  = get_rate(domain, ct, wz)
+                cpc   = volume * rate
+                total = cpc * c_ * d
+                results.append({
+                    "domain": domain, "display": display_name, "crawl_type": ct,
+                    "volume_per_crawl": volume, "freq": c_, "days": d,
+                    "zip_mode": zm, "rate": rate,
+                    "cost_per_crawl": cpc, "total_cost": total,
+                })
+
+    if not results:
+        st.warning("No crawl types configured. Select crawl types for at least one platform.")
+        return
+
+    # ── Results header ────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_header("📊", "Cost Estimate Results")
+
+    grand_total = sum(r["total_cost"] for r in results)
+    s1, s2, s3, s4 = st.columns(4)
+    for col, lbl, val, accent in [
+        (s1, "Grand Total (USD)", f"${grand_total:,.4f}", "#ef4444"),
+        (s2, "Platforms",         str(len(set(r["domain"] for r in results))), "#1f2937"),
+        (s3, "Crawl Configs",     str(len(results)),                           "#1f2937"),
+        (s4, "Generated On",      datetime.now().strftime("%d %b %Y"),         "#1f2937"),
+    ]:
+        with col:
+            st.markdown(f"""
+            <div style="background:white;border-radius:12px;padding:16px 18px;
+            border-left:4px solid {accent};box-shadow:0 2px 8px rgba(0,0,0,0.07);
+            font-family:'Inter',sans-serif;">
+                <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;
+                letter-spacing:0.09em;font-weight:700;">{lbl}</div>
+                <div style="font-size:1.15rem;font-weight:700;color:#0f172a;margin-top:5px;">{val}</div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Per-platform result tables ────────────────────────────────────────────
+    for domain in selected_domains:
+        domain_results = [r for r in results if r["domain"] == domain]
+        if not domain_results:
+            continue
+        display_name = PLATFORM_DISPLAY.get(domain, domain)
+        domain_total = sum(r["total_cost"] for r in domain_results)
+
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#1f2937 0%,#374151 100%);
+        border-radius:12px 12px 0 0;padding:12px 18px;display:flex;
+        justify-content:space-between;align-items:center;font-family:'Inter',sans-serif;">
+            <div style="font-size:0.95rem;font-weight:700;color:white;">
+                {display_name}
+                <span style="font-size:0.75rem;font-weight:400;color:#9ca3af;margin-left:6px;">({domain})</span>
+            </div>
+            <div style="font-size:0.9rem;font-weight:700;color:#fbbf24;">
+                Platform Total: ${domain_total:,.4f}
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        rows_html = ""
+        for i, r in enumerate(domain_results):
+            bg   = "#ffffff" if i % 2 == 0 else "#f9fafb"
+            icon = CRAWL_ICONS.get(r["crawl_type"], "")
+            rows_html += (
+                f'<tr style="background:{bg};border-bottom:1px solid #f1f5f9;">'
+                f'<td style="padding:10px 16px;font-size:0.875rem;color:#0f172a;font-weight:500;">{icon} {r["crawl_type"]}</td>'
+                f'<td style="padding:10px 16px;text-align:center;font-size:0.8rem;color:#374151;">{r["volume_per_crawl"]:,}</td>'
+                f'<td style="padding:10px 16px;text-align:center;font-size:0.8rem;color:#374151;">{r["freq"]}×/day</td>'
+                f'<td style="padding:10px 16px;text-align:center;font-size:0.8rem;color:#374151;">{r["days"]} days</td>'
+                f'<td style="padding:10px 16px;text-align:center;font-size:0.75rem;color:#6b7280;">{r["zip_mode"].replace(" Zipcode","")}</td>'
+                f'<td style="padding:10px 16px;text-align:right;">{_cost_cell(r["cost_per_crawl"])}</td>'
+                f'<td style="padding:10px 16px;text-align:right;">{_cost_cell(r["total_cost"])}</td>'
+                f'</tr>'
+            )
+
+        th = ("padding:9px 16px;font-size:0.7rem;text-transform:uppercase;"
+              "letter-spacing:0.1em;color:#64748b;font-weight:700;background:#f8fafc;")
+        st.markdown(f"""
+        <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;
+        overflow:hidden;margin-bottom:24px;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+        <table style="width:100%;border-collapse:collapse;font-family:'Inter',sans-serif;">
+        <thead><tr style="border-bottom:2px solid #e2e8f0;">
+            <th style="{th}text-align:left;">Crawl Type</th>
+            <th style="{th}text-align:center;">Volume/Crawl</th>
+            <th style="{th}text-align:center;">Frequency</th>
+            <th style="{th}text-align:center;">Duration</th>
+            <th style="{th}text-align:center;">Zipcode</th>
+            <th style="{th}text-align:right;">Cost/Crawl</th>
+            <th style="{th}text-align:right;">Total Cost</th>
+        </tr></thead>
+        <tbody>{rows_html}</tbody>
+        </table></div>""", unsafe_allow_html=True)
+
+    # ── Downloads ─────────────────────────────────────────────────────────────
+    section_header("📥", "Download Estimate")
+    dl1, dl2, _ = st.columns([1, 1, 2])
+
+    pdf_bytes = _generate_cost_pdf(results, grand_total, selected_domains, PLATFORM_DISPLAY, CRAWL_ICONS)
+    with dl1:
+        st.download_button(
+            "⬇️  Download PDF",
+            data=pdf_bytes,
+            file_name=f"cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    csv_lines = ["Platform,Domain,Crawl Type,Volume/Crawl,Crawls/day,Days,Zipcode,Cost/Crawl (USD),Total Cost (USD)"]
+    for r in results:
+        csv_lines.append(
+            f'{r["display"]},{r["domain"]},{r["crawl_type"]},'
+            f'{r["volume_per_crawl"]},{r["freq"]},{r["days"]},{r["zip_mode"]},'
+            f'{r["cost_per_crawl"]:.6f},{r["total_cost"]:.6f}'
+        )
+    csv_lines += ["", f'Grand Total,,,,,,, ,{grand_total:.6f}']
+    with dl2:
+        st.download_button(
+            "⬇️  Download CSV",
+            data="\n".join(csv_lines).encode(),
+            file_name=f"cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ROUTER  (auth-gated)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -2248,3 +2770,5 @@ else:
         render_ops_map()
     elif page == "poc_guide":
         render_poc_guide()
+    elif page == "cost_calc":
+        render_cost_calculator()
