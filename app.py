@@ -9,11 +9,16 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # type: ignore
 from reportlab.lib.colors import HexColor  # type: ignore
 from docx import Document
 from io import BytesIO
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import os
 import base64
 import html as _html_mod
 import re
+import time
+import json
+import uuid
+from pathlib import Path
+from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -45,6 +50,49 @@ def _safe_filename(name: str, suffix: str = "") -> str:
     safe = re.sub(r'\s+', '_', safe)
     safe = safe[:80]  # cap at 80 chars to avoid filesystem limits
     return (safe or "document") + suffix
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PERSISTENT SESSION  (file-based, stdlib only, 7-day expiry)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SESSION_FILE = Path(".42s_session.json")
+_SESSION_TTL_DAYS = 7
+
+
+def _save_session(username: str, display_name: str) -> None:
+    token = str(uuid.uuid4())
+    data = {
+        "token": token,
+        "username": username,
+        "display_name": display_name,
+        "expires": (datetime.now(timezone.utc) + timedelta(days=_SESSION_TTL_DAYS)).isoformat(),
+    }
+    try:
+        _SESSION_FILE.write_text(json.dumps(data))
+    except OSError:
+        pass
+
+
+def _load_session():
+    """Return (username, display_name) if a valid non-expired session exists, else (None, None)."""
+    try:
+        if not _SESSION_FILE.exists():
+            return None, None
+        data = json.loads(_SESSION_FILE.read_text())
+        if datetime.now(timezone.utc) > datetime.fromisoformat(data["expires"]):
+            _SESSION_FILE.unlink(missing_ok=True)
+            return None, None
+        return data["username"], data["display_name"]
+    except (OSError, KeyError, ValueError):
+        return None, None
+
+
+def _clear_session() -> None:
+    try:
+        _SESSION_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -286,8 +334,20 @@ hr {
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
 
-if "page" not in st.session_state:
-    st.session_state["page"] = "main"
+if "page"             not in st.session_state: st.session_state["page"]             = "main"
+if "authenticated"    not in st.session_state: st.session_state["authenticated"]    = False
+if "current_user"     not in st.session_state: st.session_state["current_user"]     = None
+if "display_name"     not in st.session_state: st.session_state["display_name"]     = None
+if "failed_attempts"  not in st.session_state: st.session_state["failed_attempts"]  = 0
+if "lockout_until"    not in st.session_state: st.session_state["lockout_until"]    = 0.0
+
+# Auto-restore session from disk on first load (persistent login)
+if not st.session_state["authenticated"]:
+    _sess_user, _sess_display = _load_session()
+    if _sess_user:
+        st.session_state["authenticated"] = True
+        st.session_state["current_user"]  = _sess_user
+        st.session_state["display_name"]  = _sess_display
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -593,7 +653,224 @@ def generate_pdf(data, client_name):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR
+# LOGIN PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_login():
+    """Full-page sign-in screen — dark gradient background with white card."""
+
+    # ── Page-level CSS (dark theme, animated orbs, card shell) ───────────
+    st.markdown("""
+    <style>
+    @keyframes orbFloat {
+        0%   { opacity:.5;  transform:scale(1)    translate(0,    0);    }
+        100% { opacity:.85; transform:scale(1.08) translate(1.5%, 1.5%); }
+    }
+    @keyframes cardIn {
+        from { opacity:0; transform:translateY(28px) scale(.97); }
+        to   { opacity:1; transform:translateY(0)    scale(1);   }
+    }
+    @keyframes shimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+    }
+
+    /* ── Full-page dark background ── */
+    .stApp {
+        background: linear-gradient(145deg, #0a0f1e 0%, #0f172a 40%, #111827 100%) !important;
+        min-height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* ── Animated gradient orbs ── */
+    .stApp::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background:
+            radial-gradient(ellipse at 12% 22%,  rgba(99,102,241,.22) 0%, transparent 42%),
+            radial-gradient(ellipse at 88% 78%,  rgba(16,185,129,.15) 0%, transparent 42%),
+            radial-gradient(ellipse at 60% 5%,   rgba(59,130,246,.12) 0%, transparent 38%),
+            radial-gradient(ellipse at 30% 90%,  rgba(139,92,246,.1)  0%, transparent 38%);
+        animation: orbFloat 11s ease-in-out infinite alternate;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* ── Hide all chrome ── */
+    section[data-testid="stSidebar"] { display:none !important; }
+    header   { display:none !important; }
+    footer   { display:none !important; }
+    #MainMenu { display:none !important; }
+
+    /* ── Card shell ── */
+    .block-container {
+        max-width: 450px !important;
+        margin-top: 6vh !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        border-radius: 24px !important;
+        box-shadow:
+            0 32px 80px rgba(0,0,0,.55),
+            0  0   0  1px rgba(255,255,255,.07),
+            inset 0 1px 0 rgba(255,255,255,.9) !important;
+        position: relative !important;
+        z-index: 1 !important;
+        animation: cardIn .6s cubic-bezier(.34,1.56,.64,1) both !important;
+    }
+
+    /* ── Inner padding for Streamlit widgets (inputs, button, alerts) ── */
+    [data-testid="stVerticalBlock"] {
+        padding: 0 32px 24px 32px !important;
+    }
+
+    /* ── Login inputs ── */
+    .stTextInput > div > div > input {
+        background: #f8fafc !important;
+        border: 1.5px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        font-size: 0.9rem !important;
+        color: #0f172a !important;
+        padding: 10px 14px !important;
+        transition: all .2s !important;
+    }
+    .stTextInput > div > div > input:focus {
+        background: #ffffff !important;
+        border-color: #374151 !important;
+        box-shadow: 0 0 0 3px rgba(31,41,55,.1) !important;
+    }
+    .stTextInput > div > div > input::placeholder { color: #94a3b8 !important; }
+    .stTextInput label {
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
+        color: #374151 !important;
+        letter-spacing: .04em !important;
+        text-transform: uppercase !important;
+    }
+
+    /* ── Sign-in button ── */
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 11px !important;
+        padding: 14px 0 !important;
+        font-size: .95rem !important;
+        font-weight: 700 !important;
+        letter-spacing: .035em !important;
+        box-shadow: 0 4px 18px rgba(31,41,55,.38) !important;
+        transition: all .22s ease !important;
+    }
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35) !important;
+        transform: translateY(-2px) !important;
+    }
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,.25) !important;
+    }
+
+    /* ── Streamlit warning tweak ── */
+    .stAlert { border-radius: 10px !important; font-size: .85rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Accent bar (top of card) ──────────────────────────────────────────
+    st.markdown("""<div style="height:5px;margin:0 -32px;background:linear-gradient(90deg,#1f2937 0%,#6366f1 35%,#8b5cf6 55%,#6366f1 75%,#1f2937 100%);background-size:200% 100%;animation:shimmer 3s linear infinite;"></div>""", unsafe_allow_html=True)
+
+    # ── Hero section ─────────────────────────────────────────────────────
+    if os.path.exists(LOGO_PATH):
+        img_b64 = get_base64_image(LOGO_PATH)
+        logo_html = f'<img src="data:image/png;base64,{img_b64}" style="height:54px;width:auto;margin-bottom:16px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.12));">'
+    else:
+        logo_html = '<div style="font-size:1.6rem;font-weight:800;color:#0f172a;letter-spacing:-.03em;margin-bottom:16px;">42Signals</div>'
+
+    st.markdown(f"""<div style="text-align:center;padding:36px 32px 24px 32px;margin:0 -32px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 100%);border-bottom:1px solid #f1f5f9;">
+{logo_html}
+<div style="font-size:1.55rem;font-weight:800;color:#0f172a;letter-spacing:-.035em;line-height:1.15;font-family:'Inter',sans-serif;">Welcome back</div>
+<div style="font-size:0.875rem;color:#64748b;margin-top:9px;font-family:'Inter',sans-serif;line-height:1.55;font-weight:400;">Sign in to access the 42Signals<br>Requirement Handling portal</div>
+<div style="display:flex;justify-content:center;gap:8px;margin-top:18px;flex-wrap:wrap;">
+<span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px;font-size:0.7rem;color:#475569;font-weight:600;font-family:'Inter',sans-serif;">&#128203; Forms</span>
+<span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px;font-size:0.7rem;color:#475569;font-weight:600;font-family:'Inter',sans-serif;">&#128202; Feasibility</span>
+<span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px;font-size:0.7rem;color:#475569;font-weight:600;font-family:'Inter',sans-serif;">&#128256; Workflows</span>
+</div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Lockout check ────────────────────────────────────────────────────
+    now = time.time()
+    locked    = st.session_state["lockout_until"] > now
+    remaining = int(st.session_state["lockout_until"] - now)
+
+    if locked:
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:12px;padding:15px 18px;margin-bottom:4px;color:#7f1d1d;font-family:'Inter',sans-serif;font-size:.875rem;display:flex;align-items:center;gap:12px;">
+<span style="font-size:1.5rem;flex-shrink:0;">&#128274;</span>
+<div><div style="font-weight:700;margin-bottom:3px;">Account temporarily locked</div>
+<div style="opacity:.8;">Too many failed attempts.<br>Try again in <strong>{remaining // 60}m {remaining % 60}s</strong>.</div>
+</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center;padding:20px 0 6px 0;font-size:.72rem;color:#94a3b8;font-family:'Inter',sans-serif;">Access restricted to authorised users only &middot; 42Signals &copy; 2026</div>""", unsafe_allow_html=True)
+        return
+
+    # ── Form fields ──────────────────────────────────────────────────────
+    username = st.text_input(
+        "Username",
+        placeholder="e.g. shanjai",
+        key="login_username",
+        autocomplete="username",
+    )
+    password = st.text_input(
+        "Password",
+        type="password",
+        placeholder="••••••••••",
+        key="login_password",
+        autocomplete="current-password",
+    )
+
+    # Failed-attempt inline alert
+    if st.session_state["failed_attempts"] > 0:
+        left = MAX_ATTEMPTS - st.session_state["failed_attempts"]
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#fffbeb,#fef9ec);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:11px 15px;color:#78350f;font-size:.82rem;margin-top:4px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:9px;">
+<span style="font-size:1rem;flex-shrink:0;">&#9888;&#65039;</span>
+<span>Incorrect credentials &mdash; <strong>{left} attempt{'s' if left != 1 else ''}</strong> left before lockout.</span>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+
+    if st.button("Sign In  →", type="primary", use_container_width=True, key="login_submit"):
+        if not username or not password:
+            st.warning("Please enter both username and password.")
+        elif verify_password(username, password):
+            user = get_user(username)
+            clean_user = username.strip().lower()
+            st.session_state["authenticated"]   = True
+            st.session_state["current_user"]    = clean_user
+            st.session_state["display_name"]    = user["display_name"]
+            st.session_state["failed_attempts"] = 0
+            st.session_state["lockout_until"]   = 0.0
+            _save_session(clean_user, user["display_name"])
+            st.rerun()
+        else:
+            st.session_state["failed_attempts"] += 1
+            if st.session_state["failed_attempts"] >= MAX_ATTEMPTS:
+                st.session_state["lockout_until"] = time.time() + LOCKOUT_SECONDS
+                st.session_state["failed_attempts"] = 0
+            st.rerun()
+
+    # ── Card footer ──────────────────────────────────────────────────────
+    st.markdown("""<div style="text-align:center;padding:20px 32px 6px 32px;margin:8px -32px 0 -32px;border-top:1px solid #f1f5f9;">
+<div style="font-size:.72rem;color:#94a3b8;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:10px;">
+<span style="display:inline-block;width:24px;height:1px;background:#e2e8f0;"></span>
+Access restricted to authorised users only
+<span style="display:inline-block;width:24px;height:1px;background:#e2e8f0;"></span>
+</div></div>""", unsafe_allow_html=True)
+
+    # ── Below-card caption ────────────────────────────────────────────────
+    st.markdown("""<div style="text-align:center;margin-top:22px;font-size:.7rem;color:rgba(255,255,255,.2);font-family:'Inter',sans-serif;letter-spacing:.05em;">42Signals &nbsp;&copy;&nbsp; 2026</div>""", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SIDEBAR  (CSS-hidden on login page via render_login(); Python still runs safely)
 # ─────────────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -657,8 +934,42 @@ with st.sidebar:
                 st.rerun()
 
     st.markdown('<hr style="border:none;border-top:1px solid #f0f0f0;margin:14px 0 10px 0;">', unsafe_allow_html=True)
+
+    # ── Logged-in user info + logout ──────────────────────────────────────────
+    display_name = st.session_state.get("display_name") or ""
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);
+        border:1px solid #e5e7eb; border-radius:10px;
+        padding:11px 14px; margin-bottom:10px;
+        font-family:'Inter',sans-serif;
+        display:flex; align-items:center; gap:10px;
+    ">
+        <div style="
+            width:32px; height:32px; border-radius:50%;
+            background:linear-gradient(135deg,#1f2937 0%,#374151 100%);
+            display:flex; align-items:center; justify-content:center;
+            font-size:0.8rem; font-weight:700; color:#fff; flex-shrink:0;
+        ">{_h(display_name[:1].upper()) if display_name else "?"}</div>
+        <div>
+            <div style="font-size:0.82rem;font-weight:600;color:#111827;">{_h(display_name)}</div>
+            <div style="font-size:0.7rem;color:#9ca3af;margin-top:1px;">Signed in</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("⎋  Sign Out", key="logout_btn", use_container_width=True):
+        _clear_session()
+        st.session_state["authenticated"]   = False
+        st.session_state["current_user"]    = None
+        st.session_state["display_name"]    = None
+        st.session_state["failed_attempts"] = 0
+        st.session_state["lockout_until"]   = 0.0
+        st.session_state["page"]            = "main"
+        st.rerun()
+
     st.markdown("""
-    <div style="text-align:center; padding:4px 0 12px 0;">
+    <div style="text-align:center; padding:6px 0 12px 0;">
         <div style="color:#c9d0d9; font-size:0.68rem; font-family:'Inter',sans-serif; letter-spacing:0.04em;">v1.0 &nbsp;·&nbsp; 42Signals &nbsp;·&nbsp; 2026</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1893,18 +2204,20 @@ function click(e,d){
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ROUTER
+# ROUTER  (auth-gated)
 # ─────────────────────────────────────────────────────────────────────────────
 
-page = st.session_state["page"]
-
-if page == "main":
-    render_main_form()
-elif page == "feasibility":
-    render_feasibility()
-elif page == "req_flow":
-    render_req_flow()
-elif page == "ops_map":
-    render_ops_map()
-elif page == "poc_guide":
-    render_poc_guide()
+if not st.session_state["authenticated"]:
+    render_login()
+else:
+    page = st.session_state["page"]
+    if page == "main":
+        render_main_form()
+    elif page == "feasibility":
+        render_feasibility()
+    elif page == "req_flow":
+        render_req_flow()
+    elif page == "ops_map":
+        render_ops_map()
+    elif page == "poc_guide":
+        render_poc_guide()

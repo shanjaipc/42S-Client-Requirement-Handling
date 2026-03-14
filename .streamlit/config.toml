@@ -1,0 +1,11 @@
+[server]
+# Prevent Streamlit from showing file uploader warnings
+maxUploadSize = 10
+
+[browser]
+# Disable usage stats telemetry
+gatherUsageStats = false
+
+[theme]
+base = "light"
+font = "sans serif"
