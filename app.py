@@ -24,9 +24,15 @@ from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
+try:
+    from PIL import Image as _PIL_Image
+    _page_icon = _PIL_Image.open("42slogo_top.png") if os.path.exists("42slogo_top.png") else "🔍"
+except Exception:
+    _page_icon = "🔍"
+
 st.set_page_config(
     page_title="42Signals | Requirement Handling",
-    page_icon="🔍",
+    page_icon=_page_icon,
     layout="wide",
     initial_sidebar_state="expanded",
 )
