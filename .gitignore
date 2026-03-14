@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Streamlit secrets (never commit)
+.streamlit/secrets.toml
+
+# Credentials file — contains password hashes; keep off public repos
+# credentials.py
+
+# Persistent session token (auto-generated on login)
+.42s_session.json
+
+# Environment
+.env
+.venv
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Generated outputs
+*.pdf
+*.docx
+get-pip.py
