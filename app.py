@@ -33,6 +33,15 @@ st.set_page_config(
 
 LOGO_PATH = "42slogo.png"
 
+# D3.js bundled locally so mind maps work on servers without internet access.
+# Falls back to CDN if the file is missing (dev convenience only).
+_D3_PATH = Path("d3.v7.min.js")
+_D3_INLINE = (
+    f"<script>{_D3_PATH.read_text()}</script>"
+    if _D3_PATH.exists()
+    else '{_D3_INLINE}'
+)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SECURITY HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1518,7 +1527,7 @@ html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
 <div id="tree"></div>
 <div id="legend"><b>Node Types</b><br><span style='color:#3b82f6'>&#9646;</span> Step &nbsp;<span style='color:#d97706'>&#9646;</span> Decision &nbsp;<span style='color:#22c55e'>&#9646;</span> Outcome &nbsp;<span style='color:#94a3b8'>&#9646;</span> Action</div>
 <div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
-<script src="https://d3js.org/d3.v7.min.js"></script>
+{_D3_INLINE}
 <script>
 var data={name:"New Requirement Intake",k:"start",children:[
 {name:"1. Finalise Domains",k:"step",children:[
@@ -1711,7 +1720,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
-    components.html(_html, height=1000, scrolling=False)
+    components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 def render_ops_map():
     page_title("Day-to-Day Operations Mind Map", "All 7 operational areas — expand any branch to explore tasks & tools.")
@@ -1734,7 +1743,7 @@ html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
 <div id="tree"></div>
 <div id="legend"><b>Operational Areas</b><br><span style='color:#2563eb'>&#9646;</span> Kibana Monitoring<br><span style='color:#059669'>&#9646;</span> Input Sheets<br><span style='color:#d97706'>&#9646;</span> Cost Analysis<br><span style='color:#7c3aed'>&#9646;</span> Crawl Health<br><span style='color:#dc2626'>&#9646;</span> Mapping & Tracking<br><span style='color:#0891b2'>&#9646;</span> Maintenance<br><span style='color:#be185d'>&#9646;</span> Automation<br></div>
 <div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
-<script src="https://d3js.org/d3.v7.min.js"></script>
+{_D3_INLINE}
 <script>
 var data={name:"Daily Operations Hub",children:[
 {name:"Kibana Monitoring",children:[
@@ -1955,7 +1964,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
-    components.html(_html, height=1000, scrolling=False)
+    components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 def render_poc_guide():
     page_title("Task POC Guide", "Who to contact for every task type. Colour-coded by responsible team.")
@@ -1978,7 +1987,7 @@ html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
 <div id="tree"></div>
 <div id="legend"><b>Point of Contact</b><br><span style='color:#3b82f6'>&#9646;</span> Shanjai / Srinivas<br><span style='color:#7c3aed'>&#9646;</span> Dev Team<br><span style='color:#d97706'>&#9646;</span> Platform Team<br><span style='color:#dc2626'>&#9646;</span> TPM<br><span style='color:#16a34a'>&#9646;</span> DS / QA / Product</div>
 <div id="hint">Scroll = zoom &nbsp;·&nbsp; Drag = pan &nbsp;·&nbsp; Click = expand/collapse</div>
-<script src="https://d3js.org/d3.v7.min.js"></script>
+{_D3_INLINE}
 <script>
 var data={name:"Task POC Guide",k:"root",children:[
 {name:"Site Setup",k:"dev",children:[
@@ -2197,7 +2206,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
-    components.html(_html, height=1000, scrolling=False)
+    components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 
 
