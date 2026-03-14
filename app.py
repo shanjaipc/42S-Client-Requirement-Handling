@@ -100,6 +100,9 @@ def _set_lockout(username: str, attempts: int, lockout_until: float) -> None:
             except (ValueError, OSError):
                 data = {}
         data[username.strip().lower()] = {"attempts": attempts, "lockout_until": lockout_until}
+        # Prune entries whose lockout has expired and attempt count is reset
+        now = time.time()
+        data = {u: v for u, v in data.items() if v.get("lockout_until", 0) > now or v.get("attempts", 0) > 0}
         _LOCKOUT_FILE.write_text(json.dumps(data))
     except OSError:
         pass
@@ -140,6 +143,10 @@ def _load_session():
             _SESSION_FILE.unlink(missing_ok=True)
             return None, None
         return data["username"], data["display_name"]
+    except json.JSONDecodeError:
+        # Corrupted session file — delete it so the next load starts fresh
+        _SESSION_FILE.unlink(missing_ok=True)
+        return None, None
     except (OSError, KeyError, ValueError):
         return None, None
 
@@ -467,8 +474,8 @@ def celebrate(message="Done!", sub=""):
     ">
         <div style="font-size:1.7rem; flex-shrink:0;">✅</div>
         <div>
-            <div style="font-weight:700;color:#15803d;font-size:0.95rem;letter-spacing:0.01em;">{message}</div>
-            {"" if not sub else f'<div style="color:#166534;font-size:0.8rem;margin-top:4px;opacity:0.85;">{sub}</div>'}
+            <div style="font-weight:700;color:#15803d;font-size:0.95rem;letter-spacing:0.01em;">{_h(message)}</div>
+            {"" if not sub else f'<div style="color:#166534;font-size:0.8rem;margin-top:4px;opacity:0.85;">{_h(sub)}</div>'}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -499,8 +506,8 @@ def section_header(icon, title):
 def page_title(title, subtitle=""):
     st.markdown(f"""
     <div style="padding: 4px 0 22px 0; margin-bottom: 4px;">
-        <div style="font-size: 1.65rem; font-weight: 700; color: #0f172a; line-height: 1.2; letter-spacing: -0.025em; font-family: 'Inter', sans-serif;">{title}</div>
-        {"" if not subtitle else f'<div style="font-size:0.875rem;color:#6b7280;margin-top:7px;font-weight:400;line-height:1.5;">{subtitle}</div>'}
+        <div style="font-size: 1.65rem; font-weight: 700; color: #0f172a; line-height: 1.2; letter-spacing: -0.025em; font-family: 'Inter', sans-serif;">{_h(title)}</div>
+        {"" if not subtitle else f'<div style="font-size:0.875rem;color:#6b7280;margin-top:7px;font-weight:400;line-height:1.5;">{_h(subtitle)}</div>'}
         <div style="height:3px;background:linear-gradient(90deg,#1f2937 0%,#6b7280 55%,transparent 100%);border-radius:2px;margin-top:16px;"></div>
     </div>
     """, unsafe_allow_html=True)
@@ -547,7 +554,7 @@ def calculate_risk(freq_string, volume_string):
     return "LOW" if total <= 2 else ("MODERATE" if total <= 4 else "CRITICAL")
 
 
-PREDEFINED_DOMAINS = ["swiggy.com", "blinkit.com", "zepto.com", "amazon.in", "flipkart.in"]
+PREDEFINED_DOMAINS = ["swiggy.com", "blinkit.com", "zeptonow.com", "amazon.in", "flipkart.com"]
 
 def domain_selector(label, key_prefix):
     st.markdown(f"**{label}**")
@@ -1064,6 +1071,7 @@ with st.sidebar:
         st.session_state["failed_attempts"] = 0
         st.session_state["lockout_until"]   = 0.0
         st.session_state["page"]            = "main"
+        st.session_state["cc_show_results"] = False
         st.rerun()
 
     st.markdown("""
@@ -1477,7 +1485,7 @@ def render_feasibility():
 
         # Domains
         section_header("🌐", "Domain List")
-        num_domains = st.number_input("Number of Domains", min_value=1, step=1, value=1, key="feas_num_domains")
+        num_domains = st.number_input("Number of Domains", min_value=1, max_value=50, step=1, value=1, key="feas_num_domains")
         domains = []
         if num_domains <= 6:
             cols = st.columns(min(int(num_domains), 3))
@@ -2453,11 +2461,13 @@ def render_cost_calculator():
                     PLATFORM_LIST.append(_d)
                     PLATFORM_DISPLAY[_d] = _row["display_name"].strip()
                     RATES[_d] = {}
-                RATES[_d][_key] = {
-                    "sku": float(_row["sku_rate"]),
-                    "cat": float(_row["cat_rate"]),
-                    "kw":  float(_row["kw_rate"]),
-                }
+                _sku = float(_row["sku_rate"])
+                _cat = float(_row["cat_rate"])
+                _kw  = float(_row["kw_rate"])
+                if _sku < 0 or _cat < 0 or _kw < 0:
+                    st.error(f"crawl_cost_rates.csv: negative rate for '{_d}' (zipcode={_row['zipcode']}). Rates must be ≥ 0.")
+                    return
+                RATES[_d][_key] = {"sku": _sku, "cat": _cat, "kw": _kw}
     except KeyError as e:
         st.error(f"crawl_cost_rates.csv is missing column: {e}. Expected columns: domain, display_name, zipcode, sku_rate, cat_rate, kw_rate")
         return
@@ -2467,6 +2477,21 @@ def render_cost_calculator():
     except Exception as e:
         st.error(f"Failed to load crawl_cost_rates.csv: {e}")
         return
+
+    if not PLATFORM_LIST:
+        st.error("crawl_cost_rates.csv loaded successfully but contains no domains. Add at least one domain row.")
+        return
+
+    # Remove stale selections: domains that were saved in session state but are
+    # no longer present in the CSV (e.g. domain was renamed or removed).
+    _saved_sel = st.session_state.get("cc_selected_domains", [])
+    _stale = [d for d in _saved_sel if d not in PLATFORM_LIST]
+    if _stale:
+        st.warning(
+            f"The following platform(s) are no longer in the rate config and have been removed from your selection: "
+            + ", ".join(_stale)
+        )
+        st.session_state["cc_selected_domains"] = [d for d in _saved_sel if d in PLATFORM_LIST]
 
     CRAWL_TYPES = [
         "Category Based", "SKU / Product URL Based", "SOS (Share of Search)",
@@ -2488,8 +2513,10 @@ def render_cost_calculator():
     }
 
     def get_rate(domain, crawl_type, with_zip):
+        if domain not in RATES:
+            return 0.0
         key = "with" if with_zip else "without"
-        r = RATES.get(domain, {}).get(key, RATES.get(domain, {}).get("without", {}))
+        r = RATES[domain].get(key, RATES[domain].get("without", {}))
         if crawl_type == "Category Based":           return r.get("cat", 0.0)
         if crawl_type == "Festive Sales Day Crawl":  return r.get("cat", 0.0) * 1.2
         if crawl_type == "SKU / Product URL Based":  return r.get("sku", 0.0)
@@ -2626,6 +2653,8 @@ def render_cost_calculator():
             c_ = st.session_state.get(f"cc_{domain}_{ct}_c", 1)
             d  = st.session_state.get(f"cc_{domain}_{ct}_d", 30)
             volume = compute_volume(ct, a, b)
+            if volume == 0 and ct != "Banner Crawl":
+                st.warning(f"**{display_name} — {ct}**: volume is 0. Check your inputs (e.g. number of SKUs / categories / keywords).")
             for zm, wz in zip_variants:
                 rate  = get_rate(domain, ct, wz)
                 cpc   = volume * rate
@@ -2638,6 +2667,7 @@ def render_cost_calculator():
                 })
 
     if not results:
+        st.session_state["cc_show_results"] = False
         st.warning("No crawl types configured. Select crawl types for at least one platform.")
         return
 
@@ -2646,6 +2676,8 @@ def render_cost_calculator():
     section_header("📊", "Cost Estimate Results")
 
     grand_total = sum(r["total_cost"] for r in results)
+    if grand_total == 0:
+        st.info("All configured crawl types have a $0 rate. Check that the platforms and crawl types are correct, or update the rates in crawl_cost_rates.csv.")
     s1, s2, s3, s4 = st.columns(4)
     for col, lbl, val, accent in [
         (s1, "Grand Total (USD)", f"${grand_total:,.4f}", "#ef4444"),
@@ -2741,7 +2773,7 @@ def render_cost_calculator():
             f'{r["volume_per_crawl"]},{r["freq"]},{r["days"]},{r["zip_mode"]},'
             f'{r["cost_per_crawl"]:.6f},{r["total_cost"]:.6f}'
         )
-    csv_lines += ["", f'Grand Total,,,,,,, ,{grand_total:.6f}']
+    csv_lines += ["", f'Grand Total,,,,,,,,{grand_total:.6f}']
     with dl2:
         st.download_button(
             "⬇️  Download CSV",
