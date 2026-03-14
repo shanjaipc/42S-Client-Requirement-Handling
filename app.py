@@ -1,15 +1,19 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle  # type: ignore
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
 from reportlab.lib import colors  # type: ignore
-from reportlab.lib.styles import getSampleStyleSheet  # type: ignore
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
 from reportlab.lib import pagesizes  # type: ignore
 from reportlab.lib.units import inch  # type: ignore
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # type: ignore
+from reportlab.lib.colors import HexColor  # type: ignore
 from docx import Document
 from io import BytesIO
 from datetime import date
 import os
 import base64
+import html as _html_mod
+import re
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -25,23 +29,61 @@ st.set_page_config(
 LOGO_PATH = "42slogo.png"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SECURITY HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _h(value) -> str:
+    """HTML-escape any user-supplied value before injecting into unsafe_allow_html contexts.
+    Prevents XSS when user text is embedded in st.markdown HTML strings."""
+    return _html_mod.escape(str(value), quote=True)
+
+
+def _safe_filename(name: str, suffix: str = "") -> str:
+    """Sanitize a user-supplied string for use as a download filename.
+    Strips path-traversal characters, null bytes, and limits length."""
+    safe = re.sub(r'[^\w\s\-]', '', str(name), flags=re.UNICODE).strip()
+    safe = re.sub(r'\s+', '_', safe)
+    safe = safe[:80]  # cap at 80 chars to avoid filesystem limits
+    return (safe or "document") + suffix
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # GLOBAL CSS
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Load Inter font via <link> (faster than @import inside <style>)
+st.markdown(
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">',
+    unsafe_allow_html=True,
+)
+
 st.markdown("""
 <style>
+
 /* ── Streamlit chrome ── */
 #MainMenu { visibility: hidden; }
 footer     { visibility: hidden; }
 header     { visibility: hidden; }
 
-/* ── App background ── */
-.stApp { background-color: #f5f6f8; }
+/* ── App background & global font ── */
+.stApp {
+    background-color: #f0f2f6;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
 
-/* ── Sidebar light theme ── */
+/* ── Main block container spacing ── */
+.block-container {
+    padding-top: 1.8rem !important;
+    padding-bottom: 2.5rem !important;
+}
+
+/* ── Sidebar ── */
 section[data-testid="stSidebar"] {
     background: #ffffff;
     border-right: 1px solid #e5e7eb;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.05);
 }
 section[data-testid="stSidebar"] .stMarkdown p,
 section[data-testid="stSidebar"] .element-container p,
@@ -50,8 +92,8 @@ section[data-testid="stSidebar"] .stCaption {
     color: #6b7280 !important;
 }
 section[data-testid="stSidebar"] hr {
-    border-color: #e5e7eb !important;
-    margin: 10px 0 !important;
+    border-color: #f3f4f6 !important;
+    margin: 12px 0 !important;
 }
 
 /* ── Sidebar nav buttons ── */
@@ -60,17 +102,19 @@ section[data-testid="stSidebar"] .stButton > button {
     border: 1px solid transparent !important;
     color: #6b7280 !important;
     text-align: left;
-    padding: 9px 14px;
+    padding: 10px 14px;
     border-radius: 8px;
     font-size: 0.875rem;
-    transition: all 0.15s;
+    font-weight: 500;
+    transition: all 0.18s ease;
     box-shadow: none !important;
     width: 100%;
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: #f3f4f6 !important;
+    background: #f8fafc !important;
     border-color: #e5e7eb !important;
-    color: #1f2937 !important;
+    color: #111827 !important;
+    transform: translateX(2px);
 }
 section[data-testid="stSidebar"] .stButton > button:focus {
     box-shadow: none !important;
@@ -87,89 +131,153 @@ section[data-testid="stSidebar"] details summary p {
 .stTextInput > div > div > input,
 .stTextArea > div > textarea,
 .stNumberInput > div > div > input {
-    border-radius: 7px !important;
-    border: 1.5px solid #e0e0e0 !important;
-    background: white !important;
-    font-size: 0.88rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #e5e7eb !important;
+    background: #ffffff !important;
+    font-size: 0.875rem !important;
+    color: #1f2937 !important;
     transition: border-color 0.2s, box-shadow 0.2s;
+    padding: 8px 12px !important;
 }
 .stTextInput > div > div > input:focus,
 .stTextArea > div > textarea:focus,
 .stNumberInput > div > div > input:focus {
-    border-color: #6b7280 !important;
-    box-shadow: 0 0 0 3px rgba(107,114,128,0.15) !important;
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
+    outline: none !important;
+}
+.stTextInput > div > div > input::placeholder,
+.stTextArea > div > textarea::placeholder {
+    color: #b0b7c3 !important;
 }
 
 /* ── Selectbox ── */
 .stSelectbox > div > div {
-    border-radius: 7px !important;
-    border: 1.5px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #e5e7eb !important;
     background: white !important;
-    font-size: 0.88rem !important;
+    font-size: 0.875rem !important;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stSelectbox > div > div:focus-within {
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
 }
 
 /* ── Multiselect ── */
 .stMultiSelect > div > div {
-    border-radius: 7px !important;
-    border: 1.5px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #e5e7eb !important;
     background: white !important;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stMultiSelect > div > div:focus-within {
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
 }
 
-/* ── Primary button (Generate PDF) ── */
+/* ── Primary button ── */
 div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
-    background: #1f2937 !important;
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
     color: white !important;
     border: none !important;
-    padding: 11px 32px !important;
-    border-radius: 8px !important;
-    font-size: 0.93rem !important;
+    padding: 12px 32px !important;
+    border-radius: 9px !important;
+    font-size: 0.9rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.01em !important;
-    transition: all 0.2s !important;
+    letter-spacing: 0.02em !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(31,41,55,0.22) !important;
 }
 div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover {
-    background: #374151 !important;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+    background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
     transform: translateY(-1px) !important;
 }
 
 /* ── Download button ── */
 .stDownloadButton > button {
-    background: #1f2937 !important;
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
     color: white !important;
     border: none !important;
-    border-radius: 8px !important;
+    border-radius: 9px !important;
     font-weight: 600 !important;
-    font-size: 0.93rem !important;
-    padding: 11px 0 !important;
+    font-size: 0.9rem !important;
+    padding: 12px 0 !important;
     width: 100% !important;
-    transition: all 0.2s !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(31,41,55,0.22) !important;
 }
 .stDownloadButton > button:hover {
-    background: #374151 !important;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+    background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── Expander (main area) ── */
 details > summary > div > p {
     font-weight: 600 !important;
     color: #1f2937 !important;
+    font-size: 0.875rem !important;
 }
 details {
     border: 1px solid #e5e7eb !important;
-    border-radius: 8px !important;
+    border-radius: 10px !important;
     background: white !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 10px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+    transition: box-shadow 0.2s !important;
+}
+details[open] {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
 }
 
 /* ── Radio ── */
-.stRadio > div { gap: 6px !important; }
+.stRadio > div { gap: 8px !important; }
+.stRadio > div > label { font-size: 0.875rem !important; }
 
 /* ── Date input ── */
 .stDateInput > div > div > input {
-    border-radius: 7px !important;
-    border: 1.5px solid #e0e0e0 !important;
-    font-size: 0.88rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid #e5e7eb !important;
+    font-size: 0.875rem !important;
+    padding: 8px 12px !important;
+}
+
+/* ── Labels ── */
+.stTextInput label, .stTextArea label, .stSelectbox label,
+.stMultiSelect label, .stNumberInput label, .stDateInput label {
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    letter-spacing: 0.01em !important;
+}
+
+/* ── Dividers ── */
+hr {
+    border: none !important;
+    border-top: 1px solid #e5e7eb !important;
+    margin: 18px 0 !important;
+}
+
+/* ── Spinner ── */
+.stSpinner > div { border-top-color: #374151 !important; }
+
+/* ── Success/warning/error alerts ── */
+.stAlert {
+    border-radius: 10px !important;
+    font-size: 0.875rem !important;
+}
+
+/* ── Markdown bold ── */
+.stMarkdown strong { color: #111827; font-weight: 600; }
+
+/* ── Tag chips in multiselect ── */
+.stMultiSelect span[data-baseweb="tag"] {
+    background-color: #f1f5f9 !important;
+    border-radius: 6px !important;
+    color: #1f2937 !important;
+    font-size: 0.78rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -185,7 +293,9 @@ if "page" not in st.session_state:
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
+@st.cache_data
 def get_base64_image(path):
+    """Read and base64-encode an image file. Result is cached across rerenders."""
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
@@ -210,24 +320,26 @@ def celebrate(message="Done!", sub=""):
     st.markdown(f"""
     <style>
     @keyframes slideDown {{
-        from {{ opacity: 0; transform: translateY(-18px); }}
+        from {{ opacity: 0; transform: translateY(-16px); }}
         to   {{ opacity: 1; transform: translateY(0); }}
     }}
     </style>
     <div style="
-        animation: slideDown 0.45s ease forwards;
-        background: linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);
+        animation: slideDown 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         border: 1px solid #86efac;
         border-left: 5px solid #16a34a;
-        border-radius: 10px;
-        padding: 14px 20px;
-        margin: 12px 0 8px 0;
-        display: flex; align-items: center; gap: 12px;
+        border-radius: 12px;
+        padding: 15px 20px;
+        margin: 14px 0 10px 0;
+        display: flex; align-items: center; gap: 14px;
+        box-shadow: 0 4px 16px rgba(22,163,74,0.12);
+        font-family: 'Inter', sans-serif;
     ">
-        <div style="font-size:1.6rem;">✅</div>
+        <div style="font-size:1.7rem; flex-shrink:0;">✅</div>
         <div>
-            <div style="font-weight:700;color:#15803d;font-size:0.95rem;">{message}</div>
-            {"" if not sub else f'<div style="color:#166534;font-size:0.8rem;margin-top:3px;">{sub}</div>'}
+            <div style="font-weight:700;color:#15803d;font-size:0.95rem;letter-spacing:0.01em;">{message}</div>
+            {"" if not sub else f'<div style="color:#166534;font-size:0.8rem;margin-top:4px;opacity:0.85;">{sub}</div>'}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -237,36 +349,40 @@ def section_header(icon, title):
     """Styled section header bar used inside form pages."""
     st.markdown(f"""
     <div style="
-        background: #f9fafb;
-        border-left: 4px solid #374151;
-        border-radius: 0 6px 6px 0;
-        color: #1f2937;
-        padding: 9px 16px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-left: 4px solid #1f2937;
+        border-radius: 0 10px 10px 0;
+        color: #0f172a;
+        padding: 11px 18px;
         font-weight: 700;
-        font-size: 0.9rem;
-        margin: 28px 0 14px 0;
+        font-size: 0.875rem;
+        margin: 30px 0 16px 0;
         letter-spacing: 0.02em;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 9px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        font-family: 'Inter', sans-serif;
     ">{icon}&ensp;{title}</div>
     """, unsafe_allow_html=True)
 
 
 def page_title(title, subtitle=""):
     st.markdown(f"""
-    <div style="padding: 8px 0 16px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px;">
-        <div style="font-size: 1.5rem; font-weight: 700; color: #111827; line-height: 1.2;">{title}</div>
-        {"" if not subtitle else f'<div style="font-size:0.85rem;color:#6b7280;margin-top:5px;">{subtitle}</div>'}
+    <div style="padding: 4px 0 22px 0; margin-bottom: 4px;">
+        <div style="font-size: 1.65rem; font-weight: 700; color: #0f172a; line-height: 1.2; letter-spacing: -0.025em; font-family: 'Inter', sans-serif;">{title}</div>
+        {"" if not subtitle else f'<div style="font-size:0.875rem;color:#6b7280;margin-top:7px;font-weight:400;line-height:1.5;">{subtitle}</div>'}
+        <div style="height:3px;background:linear-gradient(90deg,#1f2937 0%,#6b7280 55%,transparent 100%);border-radius:2px;margin-top:16px;"></div>
     </div>
     """, unsafe_allow_html=True)
 
 
 def info_row(label, value):
+    # _h() escapes user-supplied value to prevent XSS via unsafe_allow_html
     st.markdown(f"""
-    <div style="padding: 6px 8px 5px 8px; border-bottom: 1px solid #f3f4f6; border-radius: 4px;">
-        <div style="color:#9ca3af; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;">{label}</div>
-        <div style="color:#1f2937; font-size:0.875rem; font-weight:500; margin-top:2px;">{value}</div>
+    <div style="padding: 8px 10px 7px 10px; border-bottom: 1px solid #f3f4f6;">
+        <div style="color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px; font-family:'Inter',sans-serif;">{_h(label)}</div>
+        <div style="color:#111827; font-size:0.875rem; font-weight:500; font-family:'Inter',sans-serif;">{_h(value)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -319,9 +435,23 @@ def validate_required(client_name):
     if not client_name:
         st.markdown("""
         <div style="
-            background:#fffbeb; border:1px solid #f59e0b; border-radius:8px;
-            padding:12px 16px; color:#92400e; font-size:0.875rem; margin:4px 0 20px 0;
-        ">⚠️  Please enter a <strong>Client Name</strong> above to unlock the full form.</div>
+            background: linear-gradient(135deg, #fffbeb 0%, #fef9ec 100%);
+            border: 1px solid #fcd34d;
+            border-left: 4px solid #f59e0b;
+            border-radius: 10px;
+            padding: 13px 18px;
+            color: #78350f;
+            font-size: 0.875rem;
+            margin: 6px 0 22px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 1px 4px rgba(245,158,11,0.12);
+            font-family: 'Inter', sans-serif;
+        ">
+            <span style="font-size:1.1rem;">⚠️</span>
+            <span>Please enter a <strong>Client Name</strong> above to unlock the full form.</span>
+        </div>
         """, unsafe_allow_html=True)
         st.stop()
 
@@ -329,14 +459,14 @@ def validate_required(client_name):
 def render_summary(data):
     st.markdown("""
     <div style="
-        background: #f9fafb;
-        border-left: 4px solid #374151;
-        border-radius: 0 6px 6px 0;
-        padding: 10px 16px;
-        margin-bottom: 16px;
+        background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 12px rgba(31,41,55,0.2);
     ">
-        <div style="font-size: 0.9rem; font-weight: 700; color: #1f2937; letter-spacing: 0.02em;">📋 Live Summary</div>
-        <div style="font-size: 0.73rem; color: #6b7280; margin-top: 2px;">Auto-updates as you fill the form</div>
+        <div style="font-size: 0.9rem; font-weight: 700; color: #ffffff; letter-spacing: 0.02em; font-family:'Inter',sans-serif;">📋 Live Summary</div>
+        <div style="font-size: 0.73rem; color: #9ca3af; margin-top: 3px; font-family:'Inter',sans-serif;">Auto-updates as you fill the form</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -348,11 +478,13 @@ def render_summary(data):
     if not has_content:
         st.markdown("""
         <div style="
-            text-align:center; color:#9ca3af; padding:40px 16px;
-            background:white; border-radius:10px; border:2px dashed #e5e7eb;
+            text-align:center; padding:44px 20px;
+            background:white; border-radius:12px; border:2px dashed #e5e7eb;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         ">
-            <div style="font-size:2.2rem; margin-bottom:10px;">📝</div>
-            <div style="font-size:0.83rem; line-height:1.5;">
+            <div style="font-size:2.4rem; margin-bottom:12px; opacity:0.55;">📝</div>
+            <div style="font-size:0.875rem; font-weight:600; color:#64748b; margin-bottom:5px; font-family:'Inter',sans-serif;">Nothing here yet</div>
+            <div style="font-size:0.78rem; color:#94a3b8; line-height:1.6; font-family:'Inter',sans-serif;">
                 Start filling the form<br>to preview a summary here
             </div>
         </div>
@@ -382,11 +514,8 @@ def render_summary(data):
 
 
 def generate_pdf(data, client_name):
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image  # type: ignore
-    from reportlab.lib.styles import ParagraphStyle  # type: ignore
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-    from reportlab.lib.colors import HexColor  # type: ignore
-
+    """Build a formatted PDF from form_data. All user values are XML-escaped
+    before being passed to ReportLab Paragraph to prevent markup injection."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=pagesizes.A4,
@@ -420,11 +549,13 @@ def generate_pdf(data, client_name):
             el.append(hdr)
         else:
             el.append(Paragraph("<b>Requirement Handling Form</b>", title_s))
-    except:
+    except Exception:
         el.append(Paragraph("<b>Requirement Handling Form</b>", title_s))
 
+    # Escape client_name before embedding in ReportLab XML
+    safe_client = _html_mod.escape(str(client_name), quote=True)
     el.append(Paragraph(
-        f"Client: {client_name} &nbsp;|&nbsp; Generated: {date.today().strftime('%d %b %Y')}",
+        f"Client: {safe_client} &nbsp;|&nbsp; Generated: {date.today().strftime('%d %b %Y')}",
         sub_s
     ))
     el.append(Spacer(1, 0.1*inch))
@@ -432,10 +563,12 @@ def generate_pdf(data, client_name):
     row_colors = [HexColor("#f9fafb"), HexColor("#ffffff")]
     ci = 0
     for section, content in data.items():
-        el.append(Paragraph(f"  {section}", sec_s))
+        el.append(Paragraph(f"  {_html_mod.escape(str(section))}", sec_s))
         el.append(Spacer(1, 0.04*inch))
         rows = [
-            [Paragraph(k, key_s), Paragraph(str(v) if v else "—", val_s)]
+            # Escape both key and value — ReportLab Paragraph parses XML-like tags
+            [Paragraph(_html_mod.escape(str(k)), key_s),
+             Paragraph(_html_mod.escape(str(v)) if v else "—", val_s)]
             for k, v in content.items()
         ]
         if rows:
@@ -469,21 +602,24 @@ with st.sidebar:
     if os.path.exists(LOGO_PATH):
         img_b64 = get_base64_image(LOGO_PATH)
         st.markdown(f"""
-        <div style="text-align:center; padding:24px 0 18px 0;">
+        <div style="text-align:center; padding:28px 16px 20px 16px;">
             <img src="data:image/png;base64,{img_b64}"
-                 style="height:56px; width:auto; margin-bottom:10px;">
+                 style="height:52px; width:auto; margin-bottom:12px; display:block; margin-left:auto; margin-right:auto;">
+            <div style="font-size:0.7rem; font-weight:600; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; font-family:'Inter',sans-serif;">Requirement Handling</div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div style="text-align:center; padding:24px 0 18px 0;">
+        <div style="text-align:center; padding:28px 16px 20px 16px;">
+            <div style="font-size:1.1rem; font-weight:700; color:#1f2937;">42Signals</div>
+            <div style="font-size:0.7rem; font-weight:600; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-top:4px;">Requirement Handling</div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown('<hr style="border:none;border-top:1px solid #f0f0f0;margin:0 0 14px 0;">', unsafe_allow_html=True)
 
     # Section label
-    st.markdown('<div style="color:#9ca3af;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.12em;padding:0 4px 8px 4px;">Navigation</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#b0b7c3;font-size:0.67rem;text-transform:uppercase;letter-spacing:0.14em;padding:0 6px 10px 6px;font-weight:600;font-family:\'Inter\',sans-serif;">Navigation</div>', unsafe_allow_html=True)
 
     # Nav items
     pages = {
@@ -496,15 +632,14 @@ with st.sidebar:
 
     for key, (icon, label) in pages.items():
         if st.session_state["page"] == key:
-            # Active item — styled div, not a button
             st.markdown(f"""
             <div style="
-                background: #f3f4f6;
-                border: 1px solid #e5e7eb;
-                border-left: 3px solid #374151;
-                border-radius: 8px;
-                padding: 9px 14px;
-                color: #1f2937;
+                background: linear-gradient(135deg, #f1f5f9 0%, #e8ecf0 100%);
+                border: 1px solid #dde3ea;
+                border-left: 3px solid #1f2937;
+                border-radius: 9px;
+                padding: 10px 14px;
+                color: #111827;
                 font-size: 0.875rem;
                 font-weight: 600;
                 margin-bottom: 4px;
@@ -512,6 +647,8 @@ with st.sidebar:
                 align-items: center;
                 gap: 9px;
                 cursor: default;
+                font-family: 'Inter', sans-serif;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
             ">{icon}&ensp;{label}</div>
             """, unsafe_allow_html=True)
         else:
@@ -519,10 +656,10 @@ with st.sidebar:
                 st.session_state["page"] = key
                 st.rerun()
 
-    st.markdown("---")
+    st.markdown('<hr style="border:none;border-top:1px solid #f0f0f0;margin:14px 0 10px 0;">', unsafe_allow_html=True)
     st.markdown("""
-    <div style="text-align:center; padding:4px 0 8px 0;">
-        <div style="color:#d1d5db; font-size:0.7rem;">v1.0 · 42Signals · 2026</div>
+    <div style="text-align:center; padding:4px 0 12px 0;">
+        <div style="color:#c9d0d9; font-size:0.68rem; font-family:'Inter',sans-serif; letter-spacing:0.04em;">v1.0 &nbsp;·&nbsp; 42Signals &nbsp;·&nbsp; 2026</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -547,15 +684,15 @@ def render_main_form():
 
         c1, c2 = st.columns([2, 1])
         with c1:
-            client_name = st.text_input("Client Name *", placeholder="e.g., Unilever India")
+            client_name = st.text_input("Client Name *", placeholder="e.g., Unilever India", key="form_client_name")
         with c2:
-            priority = st.selectbox("Priority Level", ["High", "Medium", "Low"])
+            priority = st.selectbox("Priority Level", ["High", "Medium", "Low"], key="form_priority")
 
         c3, c4 = st.columns(2)
         with c3:
-            completion_date = st.date_input("Expected Completion Date")
+            completion_date = st.date_input("Expected Completion Date", key="form_completion_date")
         with c4:
-            expected_market = st.text_input("Target Market / Geography", placeholder="e.g., India, Southeast Asia")
+            expected_market = st.text_input("Target Market / Geography", placeholder="e.g., India, Southeast Asia", key="form_target_market")
 
         form_data["Client Information"] = {
             "Client Name":            client_name,
@@ -573,6 +710,7 @@ def render_main_form():
             "Select the modules required for this client",
             ["Products + Trends", "SOS (Search on Site)", "Reviews",
              "Price Violation", "Store ID Crawls", "Festive Sale Crawls"],
+            key="form_modules",
         )
         form_data["Modules Selected"] = {
             "Selected Modules": ", ".join(modules) if modules else "None"
@@ -586,7 +724,7 @@ def render_main_form():
             st.markdown("**Crawl Type**")
             crawl_type = st.radio(
                 "crawl_type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
-                label_visibility="collapsed", horizontal=True
+                label_visibility="collapsed", horizontal=True, key="pt_crawl_type"
             )
             pt["Crawl Type"] = crawl_type
 
@@ -612,25 +750,27 @@ def render_main_form():
 
                 if ph or th:
                     pt["Hourly Crawl Timings"] = st.text_input(
-                        "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM"
+                        "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM",
+                        key="pt_hourly_timings"
                     )
 
                 st.markdown("**Trends Configuration**")
                 c1, c2 = st.columns(2)
                 with c1:
-                    pt["No of RSS Crawls"] = st.number_input("Number of RSS crawls into Trends", min_value=0)
+                    pt["No of RSS Crawls"] = st.number_input("Number of RSS crawls into Trends", min_value=0, key="pt_rss_crawls")
                 with c2:
-                    pt["Expected Data Push Volume"] = st.text_input("Products volume to push into Trends")
+                    pt["Expected Data Push Volume"] = st.text_input("Products volume to push into Trends", key="pt_data_push_volume")
 
                 st.markdown("**Category Details**")
                 pt["Sample Category List"] = st.text_area(
-                    "Sample Category List", placeholder="e.g., Electronics, Fashion, Home & Kitchen"
+                    "Sample Category List", placeholder="e.g., Electronics, Fashion, Home & Kitchen",
+                    key="pt_sample_category_list"
                 )
                 cat_status = st.radio("Is final category list available?", ["Yes", "No"], key="pt_category_status", horizontal=True)
                 if cat_status == "Yes":
-                    pt["Client Category Sheet Link"] = st.text_input("Category Sheet Link")
+                    pt["Client Category Sheet Link"] = st.text_input("Category Sheet Link", key="pt_category_sheet_link")
                 else:
-                    pt["Client Category Expected Date"] = str(st.date_input("Expected date for category list"))
+                    pt["Client Category Expected Date"] = str(st.date_input("Expected date for category list", key="pt_category_expected_date"))
 
             else:
                 st.markdown("---")
@@ -648,16 +788,17 @@ def render_main_form():
                 pt["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else tf
                 if th:
                     pt["Trends Hourly Timings"] = st.text_input(
-                        "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM"
+                        "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM",
+                        key="pt_trends_hourly_timings"
                     )
 
                 st.markdown("**Inputs**")
-                pt["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs")
+                pt["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs", key="pt_sample_input_urls")
                 inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Link Below"], key="pt_inputs_status", horizontal=True)
                 if inp_status == "Not Yet Provided":
-                    pt["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs"))
+                    pt["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs", key="pt_inputs_expected_date"))
                 else:
-                    pt["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs")
+                    pt["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs", key="pt_inputs_sheet_link")
 
                 st.markdown("**Location Dependency**")
                 is_pincode = st.radio("Pincode / Zipcode based?", ["Yes", "No"], key="pt_pincode_based", horizontal=True)
@@ -665,14 +806,14 @@ def render_main_form():
                 if is_pincode == "Yes":
                     c1, c2 = st.columns(2)
                     with c1:
-                        pt["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001")
+                        pt["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001", key="pt_sample_pincode")
                     with c2:
-                        pt["Client Pincode List Link"] = st.text_input("Pincode list link (if available)")
+                        pt["Client Pincode List Link"] = st.text_input("Pincode list link (if available)", key="pt_pincode_list_link")
 
                 st.markdown("**Volume & Output**")
                 c1, c2 = st.columns(2)
                 with c1:
-                    pt["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products")
+                    pt["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products", key="pt_expected_volume")
                 with c2:
                     pt["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pt_screenshot", horizontal=True)
 
@@ -696,9 +837,9 @@ def render_main_form():
             with c2:
                 keywords_source = st.radio("Keywords source", ["Client Provided", "Provide Sample for Testing"], key="sos_keywords_source")
             if keywords_source == "Client Provided":
-                sos["SOS Keywords Sheet Link"] = st.text_input("Link to client keywords sheet")
+                sos["SOS Keywords Sheet Link"] = st.text_input("Link to client keywords sheet", key="sos_keywords_sheet_link")
             else:
-                sos["Sample Keywords"] = st.text_area("Sample keywords for testing", placeholder="e.g., laptop, shoes, home appliances")
+                sos["Sample Keywords"] = st.text_area("Sample keywords for testing", placeholder="e.g., laptop, shoes, home appliances", key="sos_sample_keywords")
 
             st.markdown("**Domains**")
             sos["Domains"] = domain_selector("Select Domains", "sos")
@@ -707,7 +848,7 @@ def render_main_form():
             with c1:
                 sos["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="sos_zipcode_required")
             if sos["Zipcode Required"] == "Yes":
-                sos["Pincode List"] = st.text_area("Pincode list (comma-separated or sheet link)", placeholder="e.g., 110001, 560001, 400001")
+                sos["Pincode List"] = st.text_area("Pincode list (comma-separated or sheet link)", placeholder="e.g., 110001, 560001, 400001", key="sos_pincode_list")
 
             st.markdown("**Crawl Depth**")
             c1, c2 = st.columns(2)
@@ -736,7 +877,7 @@ def render_main_form():
                 key="rev_source",
             )
             if "From Review Input URLs" in rev["Input Sources"]:
-                rev["Sample Review URLs"] = st.text_area("Sample review page URLs", placeholder="Provide product review page URLs")
+                rev["Sample Review URLs"] = st.text_area("Sample review page URLs", placeholder="Provide product review page URLs", key="rev_sample_urls")
 
             st.markdown("**Frequency**")
             c1, c2 = st.columns(2)
@@ -745,7 +886,7 @@ def render_main_form():
                 rev["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
             if hourly:
                 with c2:
-                    rev["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM")
+                    rev["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM", key="rev_hourly_timings")
             form_data["Reviews"] = rev
 
         # ── 6. Price Violation Module ─────────────────────────────────────
@@ -761,21 +902,22 @@ def render_main_form():
             pv["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
 
             st.markdown("**Inputs**")
-            pv["Product URL List"] = st.text_area("Product URL list to monitor", placeholder="Sample product URLs")
+            pv["Product URL List"] = st.text_area("Product URL list to monitor", placeholder="Sample product URLs", key="pv_product_url_list")
 
             c1, c2 = st.columns(2)
             with c1:
                 pv["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="pv_zipcode_required")
             if pv["Zipcode Required"] == "Yes":
-                pv["Zipcode List"] = st.text_area("Zipcode list", placeholder="e.g., 110001, 560001, 400001")
+                pv["Zipcode List"] = st.text_area("Zipcode list", placeholder="e.g., 110001, 560001, 400001", key="pv_zipcode_list")
 
             pv["Price Violation Condition"] = st.text_area(
                 "Violation condition / rule",
-                placeholder="e.g., MRP > X, Discount < Y%, price diff > 15%"
+                placeholder="e.g., MRP > X, Discount < Y%, price diff > 15%",
+                key="pv_violation_condition"
             )
             c1, c2 = st.columns(2)
             with c1:
-                pv["Sample Inputs Sheet Link"] = st.text_input("Sample inputs sheet link", placeholder="Link to sample data")
+                pv["Sample Inputs Sheet Link"] = st.text_input("Sample inputs sheet link", placeholder="Link to sample data", key="pv_sample_inputs_link")
             with c2:
                 pv["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pv_screenshot", horizontal=True)
             form_data["Price Violation"] = pv
@@ -794,11 +936,11 @@ def render_main_form():
                     "Specific store locations needed?", ["No", "Yes"], horizontal=True, key="storeid_location"
                 )
             if storeid["Specific Location Required"] == "Yes":
-                storeid["Location Details"] = st.text_area("Location details", placeholder="e.g., Bangalore, Mumbai, Delhi")
+                storeid["Location Details"] = st.text_area("Location details", placeholder="e.g., Bangalore, Mumbai, Delhi", key="storeid_location_details")
 
             storeid_status = st.radio("Specific Pincode list available?", ["Yes", "No"], horizontal=True, key="storeid_list_status")
             if storeid_status == "Yes":
-                storeid["Specific Pincode List Link"] = st.text_input("Pincode list link")
+                storeid["Specific Pincode List Link"] = st.text_input("Pincode list link", key="storeid_pincode_list_link")
             form_data["Store ID Crawls"] = storeid
 
         # ── 8. Festive Sale Crawls ────────────────────────────────────────
@@ -815,7 +957,7 @@ def render_main_form():
             if festive["Crawl Type"] == "Products + Trends Based":
                 festive["Domains"] = domain_selector("Select Domains", "festive")
             elif festive["Crawl Type"] == "Category URL Based":
-                festive["Category URL List"] = st.text_area("Category URLs", placeholder="Provide category URLs for festive crawl")
+                festive["Category URL List"] = st.text_area("Category URLs", placeholder="Provide category URLs for festive crawl", key="festive_category_urls")
 
             st.markdown("**Schedule**")
             c1, c2, c3 = st.columns(3)
@@ -859,10 +1001,11 @@ def render_main_form():
             with st.spinner("Building PDF…"):
                 pdf_bytes = generate_pdf(form_data, client_name).read()
             st.session_state["pdf_bytes"] = pdf_bytes
-            st.session_state["pdf_name"]  = f"{client_name}_Requirement_Form.pdf"
+            # _safe_filename strips path-traversal chars from user-supplied client name
+            st.session_state["pdf_name"] = _safe_filename(client_name, "_Requirement_Form.pdf")
             celebrate(
                 message="PDF generated successfully!",
-                sub=f"{client_name} Requirement Form is ready to download."
+                sub=f"{_h(client_name)} Requirement Form is ready to download."
             )
             st.toast("PDF ready! Click below to download.", icon="🎉")
 
@@ -893,21 +1036,21 @@ def render_feasibility():
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""
-        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
-            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Purpose</div>
-            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Pre-project scoping</div>
+        <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Purpose</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Pre-project scoping</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown("""
-        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
-            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Output</div>
-            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Word Document (.docx)</div>
+        <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Output</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Word Document (.docx)</div>
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""
-        <div style="background:white;border-radius:10px;padding:16px 20px;border-left:4px solid #374151;box-shadow:0 1px 4px rgba(0,0,0,0.07);">
-            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Use Case</div>
-            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:3px;">Share with tech / ops team</div>
+        <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Use Case</div>
+            <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Share with tech / ops team</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1021,10 +1164,11 @@ def render_feasibility():
                     buf.seek(0)
 
                 st.session_state["feas_doc"]  = buf.getvalue()
-                st.session_state["feas_name"] = f"{client_name}_Feasibility_Requirement.docx"
+                # _safe_filename strips path-traversal chars from user-supplied client name
+                st.session_state["feas_name"] = _safe_filename(client_name, "_Feasibility_Requirement.docx")
                 celebrate(
                     message="Feasibility Document generated!",
-                    sub=f"{client_name} feasibility doc is ready to download."
+                    sub=f"{_h(client_name)} feasibility doc is ready to download."
                 )
                 st.toast("Document ready! Click below to download.", icon="🎉")
 
@@ -1044,11 +1188,11 @@ def render_feasibility():
 
 def render_req_flow():
     page_title("New Requirement Decision Tree", "Step-by-step guide from client intake to delivery. Click nodes to expand.")
-    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;font-size:0.81rem;"><span style="color:#3b82f6;font-weight:600;">&#9646; Step</span><span style="color:#d97706;font-weight:600;">&#9646; Decision</span><span style="color:#22c55e;font-weight:600;">&#9646; Outcome</span><span style="color:#94a3b8;font-weight:600;">&#9646; Action</span><span style="color:#6b7280;margin-left:auto;font-size:0.78rem;">8 sequential steps &mdash; intake to delivery</span></div>""", unsafe_allow_html=True)
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;margin-bottom:14px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;font-size:0.82rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);font-family:'Inter',sans-serif;"><span style="color:#3b82f6;font-weight:600;">&#9646; Step</span><span style="color:#d97706;font-weight:600;">&#9646; Decision</span><span style="color:#22c55e;font-weight:600;">&#9646; Outcome</span><span style="color:#94a3b8;font-weight:600;">&#9646; Action</span><span style="color:#94a3b8;margin-left:auto;font-size:0.78rem;">8 sequential steps &mdash; intake to delivery</span></div>""", unsafe_allow_html=True)
     _html = """<!DOCTYPE html><meta charset="utf-8">
 <style>
 html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
-  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+  background:#f0f2f6;font-family:'Inter','Segoe UI',-apple-system,sans-serif;}
 #tree{width:100vw;height:100vh;}
 .node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
 .node rect:hover{opacity:.82;}
@@ -1260,11 +1404,11 @@ function click(e,d){
 
 def render_ops_map():
     page_title("Day-to-Day Operations Mind Map", "All 7 operational areas — expand any branch to explore tasks & tools.")
-    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;font-size:0.81rem;color:#6b7280;">7 operational areas &mdash; expand any branch &nbsp;&middot;&nbsp; scroll = zoom &nbsp;&middot;&nbsp; drag = pan</div>""", unsafe_allow_html=True)
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;margin-bottom:14px;font-size:0.82rem;color:#6b7280;box-shadow:0 1px 4px rgba(0,0,0,0.04);font-family:'Inter',sans-serif;">7 operational areas &mdash; expand any branch &nbsp;&middot;&nbsp; scroll to zoom &nbsp;&middot;&nbsp; drag to pan</div>""", unsafe_allow_html=True)
     _html = """<!DOCTYPE html><meta charset="utf-8">
 <style>
 html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
-  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+  background:#f0f2f6;font-family:'Inter','Segoe UI',-apple-system,sans-serif;}
 #tree{width:100vw;height:100vh;}
 .node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
 .node rect:hover{opacity:.82;}
@@ -1504,11 +1648,11 @@ function click(e,d){
 
 def render_poc_guide():
     page_title("Task POC Guide", "Who to contact for every task type. Colour-coded by responsible team.")
-    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:9px;padding:9px 18px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;font-size:0.81rem;"><span style="color:#3b82f6;font-weight:600;">&#9646; Shanjai/Srinivas</span><span style="color:#7c3aed;font-weight:600;">&#9646; Dev Team</span><span style="color:#d97706;font-weight:600;">&#9646; Platform</span><span style="color:#dc2626;font-weight:600;">&#9646; TPM</span><span style="color:#16a34a;font-weight:600;">&#9646; DS/QA/Product</span></div>""", unsafe_allow_html=True)
+    st.markdown("""<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px 20px;margin-bottom:14px;display:flex;gap:22px;flex-wrap:wrap;align-items:center;font-size:0.82rem;box-shadow:0 1px 4px rgba(0,0,0,0.04);font-family:'Inter',sans-serif;"><span style="color:#3b82f6;font-weight:600;">&#9646; Shanjai / Srinivas</span><span style="color:#7c3aed;font-weight:600;">&#9646; Dev Team</span><span style="color:#d97706;font-weight:600;">&#9646; Platform</span><span style="color:#dc2626;font-weight:600;">&#9646; TPM</span><span style="color:#16a34a;font-weight:600;">&#9646; DS / QA / Product</span></div>""", unsafe_allow_html=True)
     _html = """<!DOCTYPE html><meta charset="utf-8">
 <style>
 html,body{margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;
-  background:#f8f9fc;font-family:'Segoe UI',-apple-system,sans-serif;}
+  background:#f0f2f6;font-family:'Inter','Segoe UI',-apple-system,sans-serif;}
 #tree{width:100vw;height:100vh;}
 .node rect{stroke-width:1.8px;transition:all .18s;cursor:pointer;}
 .node rect:hover{opacity:.82;}
