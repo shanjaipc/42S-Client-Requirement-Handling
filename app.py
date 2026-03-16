@@ -2600,6 +2600,13 @@ def render_cost_calculator():
                 st.radio("Zipcode", ["Without Zipcode", "With Zipcode", "Both"],
                          key=f"cc_zip_{domain}")
 
+            _zip_mode_now = st.session_state.get(f"cc_zip_{domain}", "Without Zipcode")
+            if _zip_mode_now in ("With Zipcode", "Both"):
+                _zc_col, _ = st.columns([1, 3])
+                with _zc_col:
+                    st.number_input("Number of Zipcodes", min_value=1, value=1, step=1,
+                                    key=f"cc_zipcount_{domain}")
+
             if not selected_cts:
                 st.caption("No crawl types selected for this platform.")
                 continue
@@ -2665,6 +2672,7 @@ def render_cost_calculator():
             else [(zip_mode, zip_mode == "With Zipcode")]
         )
 
+        zip_count = st.session_state.get(f"cc_zipcount_{domain}", 1)
         for ct in selected_cts:
             a  = st.session_state.get(f"cc_{domain}_{ct}_a", 0)
             b  = st.session_state.get(f"cc_{domain}_{ct}_b", 0)
@@ -2674,12 +2682,13 @@ def render_cost_calculator():
             if volume == 0 and ct != "Banner Crawl":
                 st.warning(f"**{display_name} — {ct}**: volume is 0. Check your inputs (e.g. number of SKUs / categories / keywords).")
             for zm, wz in zip_variants:
+                effective_volume = volume * zip_count if wz else volume
                 rate  = get_rate(domain, ct, wz)
-                cpc   = volume * rate
+                cpc   = effective_volume * rate
                 total = cpc * c_ * d
                 results.append({
                     "domain": domain, "display": display_name, "crawl_type": ct,
-                    "volume_per_crawl": volume, "freq": c_, "days": d,
+                    "volume_per_crawl": effective_volume, "freq": c_, "days": d,
                     "zip_mode": zm, "rate": rate,
                     "cost_per_crawl": cpc, "total_cost": total,
                 })
