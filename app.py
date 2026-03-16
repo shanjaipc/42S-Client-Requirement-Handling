@@ -119,7 +119,7 @@ def _clear_lockout(username: str) -> None:
         pass
 
 
-def _save_session(username: str, display_name: str) -> None:
+def _save_session(username: str, display_name: str) -> str:
     token = str(uuid.uuid4())
     data = {
         "token": token,
@@ -131,24 +131,27 @@ def _save_session(username: str, display_name: str) -> None:
         _SESSION_FILE.write_text(json.dumps(data))
     except OSError:
         pass
+    return token
 
 
-def _load_session():
-    """Return (username, display_name) if a valid non-expired session exists, else (None, None)."""
+def _load_session(token: str):
+    """Return (username, display_name) if token matches a valid non-expired session, else (None, None)."""
+    if not token:
+        return None, None
     try:
         if not _SESSION_FILE.exists():
             return None, None
         data = json.loads(_SESSION_FILE.read_text())
+        if data.get("token") != token:
+            return None, None
         if datetime.now(timezone.utc) > datetime.fromisoformat(data["expires"]):
             _SESSION_FILE.unlink(missing_ok=True)
             return None, None
         return data["username"], data["display_name"]
-    except json.JSONDecodeError:
-        # Corrupted session file — delete it so the next load starts fresh
-        _SESSION_FILE.unlink(missing_ok=True)
+    except (OSError, KeyError, ValueError, json.JSONDecodeError):
         return None, None
-    except (OSError, KeyError, ValueError):
-        return None, None
+
+
 
 
 def _clear_session() -> None:
@@ -176,7 +179,18 @@ st.markdown("""
 /* ── Streamlit chrome ── */
 #MainMenu { visibility: hidden; }
 footer     { visibility: hidden; }
+[data-testid="stToolbar"]    { visibility: hidden; }
+[data-testid="stDecoration"] { visibility: hidden; }
+[data-testid="stStatusWidget"] { visibility: hidden; }
 header     { visibility: hidden; }
+header button,
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
+    visibility: visible !important;
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
 
 /* ── App background & global font ── */
 .stApp {
@@ -417,13 +431,15 @@ if "lockout_until"          not in st.session_state: st.session_state["lockout_u
 if "login_username_preview" not in st.session_state: st.session_state["login_username_preview"] = ""
 if "cc_show_results"        not in st.session_state: st.session_state["cc_show_results"]        = False
 
-# Auto-restore session from disk on first load (persistent login)
+# Restore session on reload using URL token (not shared with incognito/other browsers)
 if not st.session_state["authenticated"]:
-    _sess_user, _sess_display = _load_session()
+    _sid = st.query_params.get("sid", "")
+    _sess_user, _sess_display = _load_session(_sid)
     if _sess_user:
         st.session_state["authenticated"] = True
         st.session_state["current_user"]  = _sess_user
         st.session_state["display_name"]  = _sess_display
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -944,7 +960,8 @@ def render_login():
             st.session_state["failed_attempts"] = 0
             st.session_state["lockout_until"]   = 0.0
             _clear_lockout(clean_user)
-            _save_session(clean_user, display_name)
+            _sid = _save_session(clean_user, display_name)
+            st.query_params["sid"] = _sid
             st.rerun()
         else:
             new_attempts = _srv_attempts + 1
@@ -1065,6 +1082,7 @@ with st.sidebar:
 
     if st.button("Sign Out", key="logout_btn", use_container_width=True):
         _clear_session()
+        st.query_params.clear()
         st.session_state["authenticated"]   = False
         st.session_state["current_user"]    = None
         st.session_state["display_name"]    = None
