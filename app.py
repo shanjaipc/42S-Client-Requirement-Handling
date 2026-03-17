@@ -19,7 +19,19 @@ import time
 import json
 import uuid
 from pathlib import Path
+import pandas as pd
 from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
+from analytics import (
+    log_event,
+    get_summary,
+    load_events,
+    PAGE_LABELS,
+    EVENT_LABELS,
+    EVENT_LOGIN, EVENT_LOGOUT, EVENT_PAGE_VIEW,
+    EVENT_GENERATE_REQ_PDF, EVENT_DOWNLOAD_REQ_PDF,
+    EVENT_GENERATE_FEAS, EVENT_DOWNLOAD_FEAS,
+    EVENT_DOWNLOAD_COST_PDF, EVENT_DOWNLOAD_COST_CSV,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -430,6 +442,8 @@ if "failed_attempts"        not in st.session_state: st.session_state["failed_at
 if "lockout_until"          not in st.session_state: st.session_state["lockout_until"]          = 0.0
 if "login_username_preview" not in st.session_state: st.session_state["login_username_preview"] = ""
 if "cc_show_results"        not in st.session_state: st.session_state["cc_show_results"]        = False
+if "analytics_sid"          not in st.session_state: st.session_state["analytics_sid"]          = str(uuid.uuid4())
+if "analytics_last_page"    not in st.session_state: st.session_state["analytics_last_page"]    = ""
 
 # Restore session on reload using URL token (not shared with incognito/other browsers)
 if not st.session_state["authenticated"]:
@@ -960,6 +974,9 @@ def render_login():
             st.session_state["failed_attempts"] = 0
             st.session_state["lockout_until"]   = 0.0
             _clear_lockout(clean_user)
+            _new_analytics_sid = str(uuid.uuid4())
+            st.session_state["analytics_sid"] = _new_analytics_sid
+            log_event(EVENT_LOGIN, clean_user, _new_analytics_sid)
             _sid = _save_session(clean_user, display_name)
             st.query_params["sid"] = _sid
             st.rerun()
@@ -1041,7 +1058,19 @@ with st.sidebar:
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h2m4 0h3M7 12h2m4 0h3M7 16h2m4 0h3"/></svg>',
             "Cost Calculator",
         ),
+        "ext_tools": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+            "External Tools",
+        ),
     }
+
+    # Analytics Dashboard — admin-only nav entry
+    _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+    if _current_role == "admin":
+        _NAV["analytics"] = (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
+            "Analytics Dashboard",
+        )
 
     for key, (svg, label) in _NAV.items():
         active = st.session_state["page"] == key
@@ -1081,6 +1110,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     if st.button("Sign Out", key="logout_btn", use_container_width=True):
+        log_event(EVENT_LOGOUT, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""))
         _clear_session()
         st.query_params.clear()
         st.session_state["authenticated"]   = False
@@ -1088,8 +1118,10 @@ with st.sidebar:
         st.session_state["display_name"]    = None
         st.session_state["failed_attempts"] = 0
         st.session_state["lockout_until"]   = 0.0
-        st.session_state["page"]            = "main"
-        st.session_state["cc_show_results"] = False
+        st.session_state["page"]                = "main"
+        st.session_state["cc_show_results"]     = False
+        st.session_state["analytics_sid"]       = str(uuid.uuid4())
+        st.session_state["analytics_last_page"] = ""
         st.rerun()
 
     st.markdown("""
@@ -1433,6 +1465,7 @@ def render_main_form():
 
         # PDF Generation
         if st.button("⬇️  Generate & Download PDF", type="primary", use_container_width=True):
+            log_event(EVENT_GENERATE_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main", {"client": client_name})
             with st.spinner("Building PDF…"):
                 pdf_bytes = generate_pdf(form_data, client_name).read()
             st.session_state["pdf_bytes"] = pdf_bytes
@@ -1445,13 +1478,14 @@ def render_main_form():
             st.toast("PDF ready! Click below to download.", icon="🎉")
 
         if st.session_state.get("pdf_bytes"):
-            st.download_button(
+            if st.download_button(
                 label="📄  Download Requirement PDF",
                 data=st.session_state["pdf_bytes"],
                 file_name=st.session_state.get("pdf_name", "requirement.pdf"),
                 mime="application/pdf",
                 use_container_width=True,
-            )
+            ):
+                log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
 
     with right:
         render_summary(form_data)
@@ -1565,6 +1599,7 @@ def render_feasibility():
             if not client_name:
                 st.warning("Please enter a Client Name before generating.")
             else:
+                log_event(EVENT_GENERATE_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility", {"client": client_name})
                 with st.spinner("Building document…"):
                     doc = Document()
                     doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
@@ -1608,13 +1643,14 @@ def render_feasibility():
                 st.toast("Document ready! Click below to download.", icon="🎉")
 
         if st.session_state.get("feas_doc"):
-            st.download_button(
+            if st.download_button(
                 label="⬇️  Download Feasibility Document",
                 data=st.session_state["feas_doc"],
                 file_name=st.session_state.get("feas_name", "feasibility.docx"),
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
-            )
+            ):
+                log_event(EVENT_DOWNLOAD_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2785,13 +2821,14 @@ def render_cost_calculator():
 
     pdf_bytes = _generate_cost_pdf(results, grand_total, selected_domains, PLATFORM_DISPLAY, CRAWL_ICONS)
     with dl1:
-        st.download_button(
+        if st.download_button(
             "⬇️  Download PDF",
             data=pdf_bytes,
             file_name=f"cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
             mime="application/pdf",
             use_container_width=True,
-        )
+        ):
+            log_event(EVENT_DOWNLOAD_COST_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "cost_calc")
 
     csv_lines = ["Platform,Domain,Crawl Type,Volume/Crawl,Crawls/day,Days,Zipcode,Cost/Crawl (USD),Total Cost (USD)"]
     for r in results:
@@ -2802,13 +2839,191 @@ def render_cost_calculator():
         )
     csv_lines += ["", f'Grand Total,,,,,,,,{grand_total:.6f}']
     with dl2:
-        st.download_button(
+        if st.download_button(
             "⬇️  Download CSV",
             data="\n".join(csv_lines).encode(),
             file_name=f"cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             use_container_width=True,
-        )
+        ):
+            log_event(EVENT_DOWNLOAD_COST_CSV, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "cost_calc")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: ANALYTICS DASHBOARD  (admin only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_analytics():
+    page_title("Analytics Dashboard", "Real-time usage insights across all users and features.")
+
+    # ── Controls ───────────────────────────────────────────────────────────────
+    period_options = {"Last 7 days": 7, "Last 30 days": 30, "Last 90 days": 90, "All time": 3650}
+    ctrl1, ctrl2 = st.columns([3, 1])
+    with ctrl1:
+        period_label = st.selectbox("Time period", list(period_options.keys()), index=1, key="analytics_period")
+    with ctrl2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🔄  Refresh", use_container_width=True):
+            st.rerun()
+    days = period_options[period_label]
+    summary = get_summary(days)
+
+    # ── KPI cards ──────────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    def _kpi(label, value, sub=""):
+        sub_html = f'<div style="font-size:0.72rem;color:#9ca3af;margin-top:3px;">{sub}</div>' if sub else ""
+        return f"""
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.05);font-family:'Inter',sans-serif;">
+            <div style="font-size:0.72rem;font-weight:600;color:#9ca3af;text-transform:uppercase;
+                        letter-spacing:0.08em;margin-bottom:6px;">{label}</div>
+            <div style="font-size:1.7rem;font-weight:700;color:#1f2937;line-height:1;">{value}</div>
+            {sub_html}
+        </div>"""
+
+    k1, k2, k3, k4, k5, k6, k7, k8 = st.columns(8)
+    k1.markdown(_kpi("Sessions",        summary["total_sessions"],    f"Today: {summary['today_sessions']}"), unsafe_allow_html=True)
+    k2.markdown(_kpi("Unique Users",    summary["unique_users"],      f"Today: {summary['today_users']}"),    unsafe_allow_html=True)
+    k3.markdown(_kpi("Total Logins",    summary["login_count"]),                                              unsafe_allow_html=True)
+    k4.markdown(_kpi("Total Events",    summary["total_events"]),                                             unsafe_allow_html=True)
+    k5.markdown(_kpi("Docs Generated",  summary["docs_generated"],    "PDFs & feasibility"),                  unsafe_allow_html=True)
+    k6.markdown(_kpi("Avg Pages/Session", summary["avg_session_depth"]),                                      unsafe_allow_html=True)
+    k7.markdown(_kpi("Peak Hour",       summary["peak_hour_label"],   "Most active"),                         unsafe_allow_html=True)
+    k8.markdown(_kpi("Top Page",        summary["most_visited"]),                                             unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Highlights strip ───────────────────────────────────────────────────────
+    recent = summary["recent_events"]
+    ua = summary["user_activity"]
+    top_user = max(ua, key=lambda u: ua[u]) if ua else "—"
+    pv = summary["page_views"]
+    top_page = list(pv.keys())[0] if pv else "—"
+    highlight_items = [
+        ("🏆", "Most active user", top_user),
+        ("📄", "Most visited page", top_page),
+        ("⏰", "Peak usage hour", summary["peak_hour_label"]),
+        ("📊", "Avg pages per session", str(summary["avg_session_depth"])),
+        ("📝", "Docs / PDFs generated", str(summary["docs_generated"])),
+    ]
+    cols_h = st.columns(len(highlight_items))
+    for col, (icon, label, val) in zip(cols_h, highlight_items):
+        col.markdown(f"""
+        <div style="background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);
+                    border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;
+                    font-family:'Inter',sans-serif;text-align:center;">
+            <div style="font-size:1.3rem;">{icon}</div>
+            <div style="font-size:0.68rem;color:#9ca3af;text-transform:uppercase;
+                        letter-spacing:0.08em;margin:4px 0 2px 0;font-weight:600;">{label}</div>
+            <div style="font-size:0.88rem;font-weight:700;color:#1f2937;">{val}</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Activity over time ─────────────────────────────────────────────────────
+    section_header("📈", "Activity Over Time")
+    epd = summary["events_per_day"]
+    if epd:
+        df_epd = pd.DataFrame({"Date": list(epd.keys()), "Events": list(epd.values())}).set_index("Date")
+        st.line_chart(df_epd, width="stretch", height=200)
+    else:
+        st.info("No activity recorded yet.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_left, col_right = st.columns(2, gap="large")
+
+    # ── Page views ────────────────────────────────────────────────────────────
+    with col_left:
+        section_header("📄", "Page Views by Section")
+        if pv:
+            df_pv = pd.DataFrame({"Page": list(pv.keys()), "Views": list(pv.values())}).set_index("Page")
+            st.bar_chart(df_pv, width="stretch", height=220)
+            # table with % share
+            total_pv = sum(pv.values())
+            rows_pv = [{"Page": k, "Views": v, "Share": f"{v/total_pv*100:.0f}%"} for k, v in pv.items()]
+            st.dataframe(pd.DataFrame(rows_pv), width="stretch", hide_index=True)
+        else:
+            st.info("No page views recorded yet.")
+
+    # ── Hourly heatmap ────────────────────────────────────────────────────────
+    with col_right:
+        section_header("🕐", "Hourly Activity Distribution")
+        hd = summary["hourly_distribution"]
+        df_hd = pd.DataFrame({"Hour": list(hd.keys()), "Events": list(hd.values())}).set_index("Hour")
+        active_hours = df_hd[df_hd["Events"] > 0]
+        if not active_hours.empty:
+            st.bar_chart(active_hours, width="stretch", height=220)
+            peak_h = active_hours["Events"].idxmax()
+            st.caption(f"Peak hour: **{peak_h}** with **{active_hours.loc[peak_h, 'Events']}** events")
+        else:
+            st.info("No hourly data yet.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Per-user breakdown ────────────────────────────────────────────────────
+    section_header("👥", "Per-User Breakdown")
+    ub = summary["user_breakdown"]
+    if ub:
+        df_ub = pd.DataFrame(ub)
+        st.dataframe(df_ub, width="stretch", hide_index=True)
+    else:
+        st.info("No user data yet.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Actions breakdown ─────────────────────────────────────────────────────
+    col_a, col_b = st.columns(2, gap="large")
+    with col_a:
+        section_header("⚡", "Event Type Breakdown")
+        actions = summary["actions"]
+        if actions:
+            total_acts = sum(actions.values())
+            rows_act = [{"Event": k, "Count": v, "Share": f"{v/total_acts*100:.0f}%"} for k, v in actions.items()]
+            st.dataframe(pd.DataFrame(rows_act), width="stretch", hide_index=True)
+        else:
+            st.info("No actions recorded yet.")
+
+    with col_b:
+        section_header("📊", "User Activity (Total Events)")
+        if ua:
+            df_ua = pd.DataFrame({"User": list(ua.keys()), "Events": list(ua.values())}).set_index("User")
+            st.bar_chart(df_ua, width="stretch", height=220)
+        else:
+            st.info("No user activity yet.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Recent activity log ───────────────────────────────────────────────────
+    section_header("🕐", "Recent Activity Log")
+    if recent:
+        rows = []
+        for e in recent:
+            ts_str = e.get("ts", "")
+            try:
+                ts_str = datetime.fromisoformat(ts_str).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                pass
+            rows.append({
+                "Timestamp": ts_str,
+                "User":      e.get("username", "—"),
+                "Event":     EVENT_LABELS.get(e.get("event", ""), e.get("event", "—")),
+                "Page":      PAGE_LABELS.get(e.get("page", ""), e.get("page", "—")) if e.get("page") else "—",
+            })
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+        raw_events = load_events(days)
+        if raw_events:
+            csv_data = pd.DataFrame(raw_events).to_csv(index=False).encode()
+            st.download_button(
+                "⬇️  Export Full Log (CSV)",
+                data=csv_data,
+                file_name=f"analytics_log_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+            )
+    else:
+        st.info("No activity recorded yet.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2819,6 +3034,15 @@ if not st.session_state["authenticated"]:
     render_login()
 else:
     page = st.session_state["page"]
+    # Log page_view once per actual navigation (not on every Streamlit rerun)
+    if page != st.session_state.get("analytics_last_page", ""):
+        log_event(
+            EVENT_PAGE_VIEW,
+            st.session_state.get("current_user", ""),
+            st.session_state.get("analytics_sid", ""),
+            page,
+        )
+        st.session_state["analytics_last_page"] = page
     if page == "main":
         render_main_form()
     elif page == "feasibility":
@@ -2831,3 +3055,88 @@ else:
         render_poc_guide()
     elif page == "cost_calc":
         render_cost_calculator()
+    elif page == "analytics":
+        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+        if _role == "admin":
+            render_analytics()
+        else:
+            st.error("Access denied. This page is restricted to administrators.")
+            st.session_state["page"] = "main"
+            st.rerun()
+    elif page == "ext_tools":
+        st.markdown("""
+        <div style="font-family:'Inter',sans-serif;padding-bottom:8px;">
+            <div style="font-size:1.2rem;font-weight:700;color:#1f2937;margin-bottom:4px;">External Tools &amp; Dashboards</div>
+            <div style="font-size:0.82rem;color:#9ca3af;">Quick access to external platforms used by the team.</div>
+        </div>
+        <hr style="border:none;border-top:1px solid #f0f0f0;margin:12px 0 24px 0;">
+        """, unsafe_allow_html=True)
+
+        _EXT_TOOLS = [
+            {
+                "icon": "📓",
+                "name": "NotebookLM",
+                "desc": "AI-powered notebook for research, summarisation, and Q&A on uploaded documents.",
+                "url": "https://notebooklm.google.com/notebook/1657537a-75b5-4f77-9228-24613e4d78ea?authuser=0&pli=1",
+                "label": "Open NotebookLM",
+            },
+            {
+                "icon": "📊",
+                "name": "Kibana Dashboard",
+                "desc": "Client vs Site — 42Signals Crawl Insights. Live crawl monitoring and analytics.",
+                "url": "https://kibana42s-internal.promptcloud.com/app/dashboards#/view/e31a5fb0-41c3-11f0-ae05-5901704110bc?_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:'2025-08-19T18:30:00.000Z',to:now))",
+                "label": "Open Kibana",
+            },
+            {
+                "icon": "📋",
+                "name": "Client Requirement Sheet",
+                "desc": "Master Google Sheet tracking all client requirements and project details.",
+                "url": "https://docs.google.com/spreadsheets/d/16vondEsN55P-HibdIGgrtxFTg02cc_VmiKU0pNJVR-8/edit?gid=1545244868#gid=1545244868",
+                "label": "Open Sheet",
+            },
+            {
+                "icon": "📉",
+                "name": "42S Daily Threshold Sheet",
+                "desc": "Daily threshold tracking sheet for 42Signals crawl volume and data pipeline.",
+                "url": "https://docs.google.com/spreadsheets/d/1pDjioZXBY0TtFBb-sSQvzMXbWdBl_6xwTlCHrWbrQAY/edit?gid=0#gid=0",
+                "label": "Open Sheet",
+            },
+            {
+                "icon": "🎯",
+                "name": "Redmine Agile Board",
+                "desc": "Team ticket tracker — active sprints, assignments, and burndown chart for the 42S project.",
+                "url": "https://redmine.promptcloud.com/agile/board?set_filter=1&f%5B%5D=project_id&op%5Bproject_id%5D=%3D&v%5Bproject_id%5D%5B%5D=40733&f%5B%5D=assigned_to_id&op%5Bassigned_to_id%5D=%21&v%5Bassigned_to_id%5D%5B%5D=57565&v%5Bassigned_to_id%5D%5B%5D=97098&v%5Bassigned_to_id%5D%5B%5D=77277&v%5Bassigned_to_id%5D%5B%5D=5972&v%5Bassigned_to_id%5D%5B%5D=60148&v%5Bassigned_to_id%5D%5B%5D=96645&v%5Bassigned_to_id%5D%5B%5D=97240&v%5Bassigned_to_id%5D%5B%5D=96993&v%5Bassigned_to_id%5D%5B%5D=53918&v%5Bassigned_to_id%5D%5B%5D=97369&v%5Bassigned_to_id%5D%5B%5D=95248&v%5Bassigned_to_id%5D%5B%5D=85453&v%5Bassigned_to_id%5D%5B%5D=96640&v%5Bassigned_to_id%5D%5B%5D=84753&v%5Bassigned_to_id%5D%5B%5D=86398&f%5B%5D=status_id&op%5Bstatus_id%5D=%3D&f_status%5B%5D=1&f_status%5B%5D=8&f_status%5B%5D=7&f_status%5B%5D=21&f_status%5B%5D=20&f_status%5B%5D=2&f_status%5B%5D=25&f_status%5B%5D=74&f_status%5B%5D=4&c%5B%5D=day_in_state&c%5B%5D=parent&default_chart=burndown_chart&chart_unit=issues&group_by=assigned_to&color_base=priority",
+                "label": "Open Redmine",
+            },
+        ]
+
+        cols = st.columns(2, gap="large")
+        for i, tool in enumerate(_EXT_TOOLS):
+            with cols[i % 2]:
+                st.markdown(f"""
+                <div style="
+                    background:#fff;
+                    border:1px solid #e5e7eb;
+                    border-radius:12px;
+                    padding:20px 22px;
+                    margin-bottom:16px;
+                    box-shadow:0 1px 4px rgba(0,0,0,0.05);
+                    font-family:'Inter',sans-serif;
+                ">
+                    <div style="font-size:1.6rem;margin-bottom:10px;">{tool["icon"]}</div>
+                    <div style="font-size:0.95rem;font-weight:700;color:#1f2937;margin-bottom:6px;">{tool["name"]}</div>
+                    <div style="font-size:0.8rem;color:#6b7280;line-height:1.55;margin-bottom:16px;">{tool["desc"]}</div>
+                    <a href="{tool["url"]}" target="_blank" style="
+                        display:inline-block;
+                        background:linear-gradient(135deg,#1f2937 0%,#374151 100%);
+                        color:#fff;
+                        text-decoration:none;
+                        font-size:0.78rem;
+                        font-weight:600;
+                        padding:8px 18px;
+                        border-radius:6px;
+                        letter-spacing:0.02em;
+                        box-shadow:0 1px 4px rgba(0,0,0,0.12);
+                    ">{tool["label"]} ↗</a>
+                </div>
+                """, unsafe_allow_html=True)

@@ -55,7 +55,7 @@ USERS: Dict[str, Any] = {
         "salt": "1b2e89bba60567c27aba7850ebd0fb363c90ac8da72dcf2d19a56f0b60892c37",
         "hash": "c8ddf2d6b81aa63f5d39aaec4eb46e6c47ba27b30e2d0aca4e4ca96a796cffd7",
         "display_name": "Srinivas",
-        "role": "admin",
+        "role": "viewer",
     },
     "admin": {
         "salt": "9adf73d346ebf65e205a3c9f0b1986b8c41c185a30a447571cf5a3a8616ecc31",
@@ -67,31 +67,31 @@ USERS: Dict[str, Any] = {
         "salt": "08d03b6766d728b9f5253bc95b3cb3d0522eeb5a755ea0acf62e36cfa4ed9892",
         "hash": "5be10faf07a7713275ffc9aa182b7c5753e9445373c28bf4f8e31ff5206f81ed",
         "display_name": "Pgupta",
-        "role": "admin",
+        "role": "viewer",
     },
     "josh": {
         "salt": "47bb40a92cf98a9f744f2e060c6a572922c80d60ed8344df693ed4092abdd5c1",
         "hash": "35d5015c713c12dedc751d42f57d8799cc88ad6c72b0c75caf7d18f63747a121",
         "display_name": "Josh",
-        "role": "admin",
+        "role": "viewer",
     },
     "ankit": {
         "salt": "e5998a0320d7460ffb2bd14a6b6f08bcd9d6ec36ea565c5905c4955d9ee83237",
         "hash": "afbcfbf54f52fc8559f6b29a6b58d872b5177c15d37bfa01c906a683b9994bc5",
         "display_name": "Ankit",
-        "role": "admin",
+        "role": "viewer",
     },
     "arunashok": {
         "salt": "2eb6ea09c3fe52fa96a87043772a8ec4bb1c2787b282df180c4af155f42f9fb0",
         "hash": "de7902c109809313ccde4e766a527f189d7bdac6f781b73233d06dfd0a150296",
         "display_name": "Arunashok",
-        "role": "admin",
+        "role": "viewer",
     },
     "ravindran": {
         "salt": "87c2144ee6b2fbfefdab5cdc24d0ccdf72a8f8fc081419b9f395e35ddb0e907b",
         "hash": "57a80b117a6c6eddc40f06217acf5f4c1209f75316593b7e7bd22ebbc47ea4cc",
         "display_name": "Ravindran",
-        "role": "admin",
+        "role": "viewer",
     },
 }
 
