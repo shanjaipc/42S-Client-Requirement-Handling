@@ -36,3 +36,6 @@
 {"ts": "2026-03-17T11:14:05.652606+00:00", "session_id": "61b312db-fb22-4e55-8193-14a1b109311c", "username": "ankit", "event": "page_view", "page": "feasibility", "details": {}}
 {"ts": "2026-03-17T11:14:06.140692+00:00", "session_id": "61b312db-fb22-4e55-8193-14a1b109311c", "username": "ankit", "event": "page_view", "page": "main", "details": {}}
 {"ts": "2026-03-17T11:14:07.242132+00:00", "session_id": "61b312db-fb22-4e55-8193-14a1b109311c", "username": "ankit", "event": "page_view", "page": "ext_tools", "details": {}}
+{"ts": "2026-03-17T13:30:30.558495+00:00", "session_id": "a90066cb-c09b-436b-8f57-99a0297cc3d2", "username": "ankit", "event": "login", "page": "", "details": {}}
+{"ts": "2026-03-17T13:30:30.616104+00:00", "session_id": "a90066cb-c09b-436b-8f57-99a0297cc3d2", "username": "ankit", "event": "page_view", "page": "main", "details": {}}
+{"ts": "2026-03-17T13:30:32.955388+00:00", "session_id": "a90066cb-c09b-436b-8f57-99a0297cc3d2", "username": "ankit", "event": "page_view", "page": "feasibility", "details": {}}
