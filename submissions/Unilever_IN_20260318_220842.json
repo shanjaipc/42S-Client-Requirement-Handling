@@ -1,0 +1,84 @@
+{
+  "client_name": "Unilever IN",
+  "saved_at": "2026-03-18T22:08:42.902249",
+  "saved_by": "shanjai",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "Unilever IN",
+      "Priority Level": "High",
+      "Expected Completion": "2026-03-23",
+      "Target Market": "IN"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Products + Trends"
+    },
+    "Products + Trends": {
+      "Domains": "blinkit.com, swiggy.com",
+      "blinkit.com \u2014 Crawl Type": "Input-based (URL/Input driven)",
+      "blinkit.com \u2014 Overall Frequency": "Daily",
+      "blinkit.com \u2014 Products Crawl Needed": "No",
+      "blinkit.com \u2014 Trends Crawl Frequency": "Daily",
+      "blinkit.com \u2014 Sample Input URLs": "",
+      "blinkit.com \u2014 Client Inputs Sheet Link": "dsvccwsvc",
+      "blinkit.com \u2014 Pincode Based": "No",
+      "blinkit.com \u2014 Expected Volume": "acsdcs",
+      "blinkit.com \u2014 Screenshot Required": "No",
+      "swiggy.com \u2014 Crawl Type": "Input-based (URL/Input driven)",
+      "swiggy.com \u2014 Overall Frequency": "Daily",
+      "swiggy.com \u2014 Products Crawl Needed": "No",
+      "swiggy.com \u2014 Trends Crawl Frequency": "Daily",
+      "swiggy.com \u2014 Sample Input URLs": "wcac",
+      "swiggy.com \u2014 Client Inputs Expected Date": "2026-03-18",
+      "swiggy.com \u2014 Pincode Based": "No",
+      "swiggy.com \u2014 Expected Volume": "1212",
+      "swiggy.com \u2014 Screenshot Required": "No",
+      "Specific Fields": "NA"
+    },
+    "Final Alignment": {
+      "Client Core Objective": "NA",
+      "Expectations From Us": "NA"
+    },
+    "Comments & Notes": {
+      "Additional Comments": "NA"
+    }
+  },
+  "session_state": {
+    "pt_inputs_expected_date_swiggy_com": "2026-03-18",
+    "final_objective": "NA",
+    "pt_input_products_needed_swiggy_com": "No",
+    "pt_expected_volume_swiggy_com": "1212",
+    "final_expectation": "NA",
+    "pt_inputs_status_blinkit_com": "Available \u2014 See Link Below",
+    "pt_inputs_status_swiggy_com": "Not Yet Provided",
+    "pt_mode": "Different config per domain",
+    "pt_custom_domain": "",
+    "form_completion_date": "2026-03-23",
+    "pt_sample_input_urls_blinkit_com": "",
+    "pt_overall_blinkit_com_freq": "Daily",
+    "form_priority": "High",
+    "pt_crawl_type_blinkit_com": "Input-based (URL/Input driven)",
+    "pt_input_trend_blinkit_com_freq": "Daily",
+    "pt_screenshot_blinkit_com": "No",
+    "pt_crawl_type_swiggy_com": "Input-based (URL/Input driven)",
+    "form_client_name": "Unilever IN",
+    "pt_expected_volume_blinkit_com": "acsdcs",
+    "pt_input_trend_swiggy_com_freq": "Daily",
+    "pt_specific_fields": "NA",
+    "form_modules": [
+      "Products + Trends"
+    ],
+    "form_target_market": "IN",
+    "pt_inputs_sheet_link_blinkit_com": "dsvccwsvc",
+    "pt_screenshot_swiggy_com": "No",
+    "pt_pincode_based_blinkit_com": "No",
+    "pt_overall_swiggy_com_freq": "Daily",
+    "pt_input_products_needed_blinkit_com": "No",
+    "final_comments": "NA",
+    "pt_sample_input_urls_swiggy_com": "wcac",
+    "pt_domains": [
+      "blinkit.com",
+      "swiggy.com"
+    ],
+    "pt_pincode_based_swiggy_com": "No"
+  }
+}

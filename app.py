@@ -233,7 +233,7 @@ header button,
 /* ── Sidebar ── */
 section[data-testid="stSidebar"] {
     background: #ffffff;
-    border-right: 1px solid #e5e7eb;
+    border-right: 1px solid #d1d5db;
     box-shadow: 2px 0 12px rgba(0,0,0,0.05);
 }
 section[data-testid="stSidebar"] .stMarkdown p,
@@ -243,7 +243,7 @@ section[data-testid="stSidebar"] .stCaption {
     color: #6b7280 !important;
 }
 section[data-testid="stSidebar"] hr {
-    border-color: #f3f4f6 !important;
+    border-color: #e5e7eb !important;
     margin: 12px 0 !important;
 }
 
@@ -278,9 +278,21 @@ section[data-testid="stSidebar"] .stButton > button:active {
     box-shadow: none !important;
     transform: none !important;
 }
-section[data-testid="stSidebar"] .stButton > button:focus:not(:active) {
+/* Sidebar button inner <p>/<span> — let them inherit the button's colour
+   instead of being forced to #1f2937 by the global .element-container p rule */
+section[data-testid="stSidebar"] .stButton > button p,
+section[data-testid="stSidebar"] .stButton > button span {
+    color: inherit !important;
+}
+/* Use focus-visible so keyboard users see a clear outline; mouse clicks don't trigger it */
+section[data-testid="stSidebar"] .stButton > button:focus-visible {
+    outline: 2px solid #374151 !important;
+    outline-offset: 2px !important;
     box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stButton > button:focus:not(:focus-visible) {
     outline: none !important;
+    box-shadow: none !important;
 }
 
 /* ── Sidebar expander ── */
@@ -289,64 +301,102 @@ section[data-testid="stSidebar"] details summary p {
     font-weight: 600 !important;
 }
 
-/* ── Text inputs ── */
-.stTextInput > div > div > input,
-.stTextArea > div > textarea,
-.stNumberInput > div > div > input {
+/* ── Text inputs & textareas ── */
+/* Use broad selectors to cover Streamlit's nested data-baseweb wrappers */
+.stTextInput input,
+.stTextArea textarea {
     border-radius: 8px !important;
-    border: 1.5px solid #e5e7eb !important;
+    border: 1.5px solid #c9cfd8 !important;
     background: #ffffff !important;
     font-size: 0.875rem !important;
     color: #1f2937 !important;
     transition: border-color 0.2s, box-shadow 0.2s !important;
     padding: 8px 12px !important;
 }
-.stTextInput > div > div > input:focus,
-.stTextArea > div > textarea:focus,
-.stNumberInput > div > div > input:focus {
+.stTextInput input:focus,
+.stTextArea textarea:focus {
     border-color: #374151 !important;
     box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
     outline: none !important;
 }
-.stTextInput > div > div > input::placeholder,
-.stTextArea > div > textarea::placeholder {
+.stTextInput input::placeholder,
+.stTextArea textarea::placeholder {
     color: #b0b7c3 !important;
+}
+/* Ensure the baseweb container itself doesn't show a competing background */
+.stTextArea [data-baseweb="textarea"],
+.stTextArea > div > div {
+    background: transparent !important;
+    border: none !important;
 }
 
 /* ── Selectbox ── */
-.stSelectbox > div > div {
+.stSelectbox [data-baseweb="select"] > div:first-child {
     border-radius: 8px !important;
-    border: 1.5px solid #e5e7eb !important;
-    background: white !important;
+    border: 1.5px solid #c9cfd8 !important;
+    background: #ffffff !important;
     font-size: 0.875rem !important;
     color: #1f2937 !important;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
 }
-.stSelectbox > div > div > div { color: #1f2937 !important; }
-.stSelectbox > div > div:focus-within {
+.stSelectbox [data-baseweb="select"] > div:first-child:focus-within {
     border-color: #374151 !important;
     box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
 }
+/* Text & icon colours inside the closed select box only (not the portal) */
+.stSelectbox [data-baseweb="select"] > div:first-child span,
+.stSelectbox [data-baseweb="select"] > div:first-child > div { color: #1f2937 !important; }
 
 /* ── Multiselect ── */
-.stMultiSelect > div > div {
+.stMultiSelect [data-baseweb="select"] > div:first-child {
     border-radius: 8px !important;
-    border: 1.5px solid #e5e7eb !important;
-    background: white !important;
+    border: 1.5px solid #c9cfd8 !important;
+    background: #ffffff !important;
+    font-size: 0.875rem !important;
     color: #1f2937 !important;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.stMultiSelect [data-baseweb="select"] > div:first-child:focus-within {
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
 }
 .stMultiSelect input { color: #1f2937 !important; }
 .stMultiSelect [data-baseweb="select"] span { color: #1f2937 !important; }
-.stMultiSelect > div > div:focus-within {
-    border-color: #374151 !important;
-    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
+
+/* ── Dropdown portal (renders at body root, outside stApp) ── */
+/* Option list container */
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="select__dropdown"] {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+}
+/* Individual options */
+[data-baseweb="menu"] [role="option"],
+[data-baseweb="popover"] li {
+    font-size: 0.875rem !important;
+    color: #1f2937 !important;
+    background: #ffffff !important;
+    font-family: 'Inter', sans-serif !important;
+}
+/* Hovered option */
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="popover"] li:hover {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+}
+/* Selected/active option */
+[data-baseweb="menu"] [aria-selected="true"],
+[data-baseweb="menu"] [role="option"][data-highlighted] {
+    background: #1f2937 !important;
+    color: #ffffff !important;
 }
 
 /* ── Primary button ── */
 div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
-    color: white !important;
+    color: #ffffff !important;
     border: none !important;
     padding: 12px 32px !important;
     border-radius: 9px !important;
@@ -358,14 +408,60 @@ div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
 }
 div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover {
     background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+    color: #ffffff !important;
     box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
     transform: translateY(-1px) !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:focus-visible {
+    outline: 2px solid #374151 !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 4px rgba(55,65,81,0.2) !important;
+}
+/* White text for primary buttons only — scoped to [kind="primary"] so
+   secondary buttons (light bg) are NOT affected. */
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] p,
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] span {
+    color: #ffffff !important;
+}
+
+/* ── Secondary button (default st.button with no type=) ── */
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"] {
+    background: #ffffff !important;
+    color: #1f2937 !important;
+    border: 1.5px solid #c9cfd8 !important;
+    border-radius: 9px !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    padding: 8px 18px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: none !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"]:hover {
+    background: #f1f5f9 !important;
+    border-color: #9ca3af !important;
+    color: #0f172a !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"]:active {
+    background: #e8ecf0 !important;
+    border-color: #9ca3af !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    transform: translateY(1px) !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"]:focus-visible {
+    outline: 2px solid #374151 !important;
+    outline-offset: 3px !important;
+}
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"] p,
+div[data-testid="stMainBlockContainer"] .stButton > button[kind="secondary"] span {
+    color: #1f2937 !important;
 }
 
 /* ── Download button ── */
 .stDownloadButton > button {
     background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
-    color: white !important;
+    color: #ffffff !important;
     border: none !important;
     border-radius: 9px !important;
     font-weight: 600 !important;
@@ -377,8 +473,19 @@ div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover
 }
 .stDownloadButton > button:hover {
     background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+    color: #ffffff !important;
     box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
     transform: translateY(-1px) !important;
+}
+.stDownloadButton > button:focus-visible {
+    outline: 2px solid #374151 !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 4px rgba(55,65,81,0.2) !important;
+}
+/* Same fix for download button inner text */
+.stDownloadButton > button p,
+.stDownloadButton > button span {
+    color: #ffffff !important;
 }
 
 /* ── Expander (main area) ── */
@@ -387,8 +494,13 @@ details > summary > div > p {
     color: #1f2937 !important;
     font-size: 0.875rem !important;
 }
+/* Chevron icon beside the summary label */
+details > summary svg {
+    color: #4b5563 !important;
+    fill: #4b5563 !important;
+}
 details {
-    border: 1px solid #e5e7eb !important;
+    border: 1px solid #d1d5db !important;
     border-radius: 10px !important;
     background: white !important;
     margin-bottom: 10px !important;
@@ -436,15 +548,34 @@ details[open] {
     line-height: 1 !important;
     color: #374151 !important;
 }
+/* Radio keyboard focus — visible outline for accessibility */
+.stRadio input[type="radio"]:focus-visible + div,
+.stRadio [data-baseweb="radio"]:focus-within {
+    outline: 2px solid #374151 !important;
+    outline-offset: 2px !important;
+    border-radius: 50% !important;
+}
 
 /* ── Date input ── */
-.stDateInput > div > div > input {
+.stDateInput input {
     border-radius: 8px !important;
-    border: 1.5px solid #e5e7eb !important;
+    border: 1.5px solid #c9cfd8 !important;
     background: #ffffff !important;
     font-size: 0.875rem !important;
     color: #1f2937 !important;
     padding: 8px 12px !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.stDateInput input:focus {
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
+    outline: none !important;
+}
+.stDateInput input::placeholder { color: #b0b7c3 !important; }
+.stDateInput [data-baseweb="input"],
+.stDateInput > div > div {
+    background: transparent !important;
+    border: none !important;
 }
 
 /* ── Labels ── */
@@ -460,17 +591,27 @@ details[open] {
 /* ── Dividers ── */
 hr {
     border: none !important;
-    border-top: 1px solid #e5e7eb !important;
+    border-top: 1px solid #d1d5db !important;
     margin: 18px 0 !important;
 }
 
 /* ── Spinner ── */
 .stSpinner > div { border-top-color: #374151 !important; }
 
-/* ── Success/warning/error alerts ── */
+/* ── Alerts (info / success / warning / error) ── */
 .stAlert {
     border-radius: 10px !important;
     font-size: 0.875rem !important;
+    font-family: 'Inter', sans-serif !important;
+}
+/* Let each alert type keep its own colour — the global "> div p" rule would
+   otherwise force all alert text to #1f2937, killing green/red/yellow coding. */
+.stAlert p, .stAlert span, .stAlert a {
+    color: inherit !important;
+    font-size: 0.875rem !important;
+}
+[data-testid="stNotification"] {
+    border-radius: 10px !important;
 }
 
 /* ── Markdown bold ── */
@@ -486,8 +627,37 @@ hr {
 .stMultiSelect span[data-baseweb="tag"] button { color: #6b7280 !important; }
 .stMultiSelect input::placeholder { color: #b0b7c3 !important; }
 
-/* ── Number input ── */
-.stNumberInput > div > div > input { color: #1f2937 !important; }
+/* ── Number input — full styling including stepper buttons ── */
+.stNumberInput input {
+    background: #ffffff !important;
+    border: 1.5px solid #c9cfd8 !important;
+    border-radius: 8px !important;
+    color: #1f2937 !important;
+    font-size: 0.875rem !important;
+    padding: 8px 12px !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.stNumberInput input:focus {
+    border-color: #374151 !important;
+    box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
+    outline: none !important;
+}
+.stNumberInput input::placeholder { color: #b0b7c3 !important; }
+/* Stepper +/- buttons */
+.stNumberInput [data-baseweb="input"] button {
+    background: #f8fafc !important;
+    border-left: 1px solid #c9cfd8 !important;
+    color: #374151 !important;
+}
+.stNumberInput [data-baseweb="input"] button:hover {
+    background: #f1f5f9 !important;
+    color: #1f2937 !important;
+}
+/* Remove competing wrapper border */
+.stNumberInput [data-baseweb="input"] {
+    border: none !important;
+    background: transparent !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -607,8 +777,8 @@ def page_title(title, subtitle=""):
 def info_row(label, value):
     # _h() escapes user-supplied value to prevent XSS via unsafe_allow_html
     st.markdown(f"""
-    <div style="padding: 8px 10px 7px 10px; border-bottom: 1px solid #f3f4f6;">
-        <div style="color:#94a3b8; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px; font-family:'Inter',sans-serif;">{_h(label)}</div>
+    <div style="padding: 8px 10px 7px 10px; border-bottom: 1px solid #e5e7eb;">
+        <div style="color:#6b7280; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:3px; font-family:'Inter',sans-serif;">{_h(label)}</div>
         <div style="color:#111827; font-size:0.875rem; font-weight:500; font-family:'Inter',sans-serif;">{_h(value)}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -647,8 +817,27 @@ def calculate_risk(freq_string, volume_string):
 
 PREDEFINED_DOMAINS = ["swiggy.com", "blinkit.com", "zeptonow.com", "amazon.in", "flipkart.com"]
 
+
+def _section_label(text: str) -> None:
+    """Render a bold section label as HTML.
+
+    Use this instead of st.markdown(f"**{text}**") whenever `text` is a
+    variable or contains an asterisk — trailing/embedded asterisks break
+    Markdown bold syntax (e.g. "**Domains ***" is invalid).
+    """
+    if text.endswith(" *"):
+        base = text[:-2]
+        html = (
+            f'<span style="font-weight:600;color:#374151;font-size:0.875rem;">'
+            f'{base} <span style="color:#dc2626;font-weight:700;">*</span></span>'
+        )
+    else:
+        html = f'<span style="font-weight:600;color:#374151;font-size:0.875rem;">{text}</span>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def domain_selector(label, key_prefix):
-    st.markdown(f"**{label}**")
+    _section_label(label)
     col1, col2 = st.columns([3, 1])
     with col1:
         selected = st.multiselect(label, PREDEFINED_DOMAINS, key=f"{key_prefix}_domains", label_visibility="collapsed")
@@ -939,12 +1128,12 @@ def render_summary(data):
         st.markdown("""
         <div style="
             text-align:center; padding:44px 20px;
-            background:white; border-radius:12px; border:2px dashed #e5e7eb;
+            background:white; border-radius:12px; border:2px dashed #d1d5db;
             box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         ">
             <div style="font-size:2.4rem; margin-bottom:12px; opacity:0.55;">📝</div>
             <div style="font-size:0.875rem; font-weight:600; color:#64748b; margin-bottom:5px; font-family:'Inter',sans-serif;">Nothing here yet</div>
-            <div style="font-size:0.78rem; color:#94a3b8; line-height:1.6; font-family:'Inter',sans-serif;">
+            <div style="font-size:0.78rem; color:#6b7280; line-height:1.6; font-family:'Inter',sans-serif;">
                 Start filling the form<br>to preview a summary here
             </div>
         </div>
@@ -1132,22 +1321,25 @@ def render_login():
         padding: 0 32px 24px 32px !important;
     }
 
-    /* ── Login inputs ── */
+    /* ── Login inputs (broad selectors to cover Streamlit's nested wrappers) ── */
+    .stTextInput input,
     .stTextInput > div > div > input {
         background: #f8fafc !important;
-        border: 1.5px solid #e2e8f0 !important;
+        border: 1.5px solid #cbd5e1 !important;
         border-radius: 10px !important;
         font-size: 0.9rem !important;
         color: #0f172a !important;
         padding: 10px 14px !important;
         transition: all .2s !important;
     }
+    .stTextInput input:focus,
     .stTextInput > div > div > input:focus {
         background: #ffffff !important;
         border-color: #374151 !important;
         box-shadow: 0 0 0 3px rgba(31,41,55,.1) !important;
+        outline: none !important;
     }
-    .stTextInput > div > div > input::placeholder { color: #94a3b8 !important; }
+    .stTextInput input::placeholder { color: #94a3b8 !important; }
     .stTextInput label {
         font-size: 0.78rem !important;
         font-weight: 700 !important;
@@ -1156,10 +1348,12 @@ def render_login():
         text-transform: uppercase !important;
     }
 
-    /* ── Sign-in button ── */
-    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"] {
+    /* ── Sign-in button (form_submit_button renders inside .stFormSubmitButton) ── */
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"],
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button,
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button[kind="primary"] {
         background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important;
-        color: #fff !important;
+        color: #ffffff !important;
         border: none !important;
         border-radius: 11px !important;
         padding: 14px 0 !important;
@@ -1169,18 +1363,31 @@ def render_login():
         box-shadow: 0 4px 18px rgba(31,41,55,.38) !important;
         transition: all .22s ease !important;
     }
-    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover {
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover,
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button:hover {
         background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+        color: #ffffff !important;
         box-shadow: 0 10px 30px rgba(0,0,0,.35) !important;
         transform: translateY(-2px) !important;
     }
-    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:active {
+    [data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:active,
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button:active {
         transform: translateY(0) !important;
         box-shadow: 0 4px 12px rgba(0,0,0,.25) !important;
     }
+    /* Ensure text inside the button is always white */
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button p,
+    [data-testid="stMainBlockContainer"] .stFormSubmitButton > button span {
+        color: #ffffff !important;
+    }
 
-    /* ── Streamlit warning tweak ── */
-    .stAlert { border-radius: 10px !important; font-size: .85rem !important; }
+    /* ── Alerts on login page ── */
+    .stAlert {
+        border-radius: 10px !important;
+        font-size: .85rem !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    .stAlert p, .stAlert span { font-size: .85rem !important; color: inherit !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1194,7 +1401,7 @@ def render_login():
     else:
         logo_html = '<div style="font-size:1.6rem;font-weight:800;color:#0f172a;letter-spacing:-.03em;margin-bottom:16px;">42Signals</div>'
 
-    st.markdown(f"""<div style="text-align:center;padding:36px 32px 24px 32px;margin:0 -32px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 100%);border-bottom:1px solid #f1f5f9;">
+    st.markdown(f"""<div style="text-align:center;padding:36px 32px 24px 32px;margin:0 -32px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 100%);border-bottom:1px solid #e2e8f0;">
 {logo_html}
 <div style="font-size:1.55rem;font-weight:800;color:#0f172a;letter-spacing:-.035em;line-height:1.15;font-family:'Inter',sans-serif;">Welcome back</div>
 <div style="font-size:0.875rem;color:#475569;margin-top:9px;font-family:'Inter',sans-serif;line-height:1.55;font-weight:400;">Sign in to access the 42Signals<br>Requirement Handling portal</div>
@@ -1433,6 +1640,95 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SUBMISSION PERSISTENCE
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SUBMISSIONS_DIR = Path("submissions")
+_FORM_KEY_PREFIXES = (
+    "form_", "pt_", "sos_", "rev_", "pv_", "storeid_", "festive_", "final_",
+)
+# Keys used by date_input widgets — need converting back to datetime.date on load
+_DATE_INPUT_KEYS = {
+    "form_completion_date", "pt_category_expected_date", "pt_inputs_expected_date",
+    "festive_start", "festive_end",
+}
+
+
+def _json_default(obj):
+    """JSON serialiser for types not handled natively (date, set, etc.)."""
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, set):
+        return list(obj)
+    return str(obj)
+
+
+def save_submission(form_data: dict, client_name: str, username: str) -> None:
+    """Persist the current form widget state and form_data to submissions/."""
+    _SUBMISSIONS_DIR.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", client_name or "unknown")
+    filename = f"{safe_name}_{timestamp}.json"
+    # Capture all widget keys that belong to the requirement form
+    snapshot = {
+        k: v for k, v in st.session_state.items()
+        if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES)
+    }
+    payload = {
+        "client_name": client_name,
+        "saved_at": datetime.now().isoformat(),
+        "saved_by": username,
+        "form_data": form_data,
+        "session_state": snapshot,
+    }
+    with open(_SUBMISSIONS_DIR / filename, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, default=_json_default)
+
+
+def list_submissions() -> list[dict]:
+    """Return list of submission metadata dicts, newest first."""
+    if not _SUBMISSIONS_DIR.exists():
+        return []
+    result = []
+    for p in sorted(_SUBMISSIONS_DIR.glob("*.json"), reverse=True):
+        try:
+            with open(p, encoding="utf-8") as fh:
+                data = json.load(fh)
+            result.append({
+                "filename": p.name,
+                "client_name": data.get("client_name", p.stem),
+                "saved_at": data.get("saved_at", ""),
+                "saved_by": data.get("saved_by", ""),
+            })
+        except Exception:
+            pass
+    return result
+
+
+def load_submission(filename: str) -> None:
+    """Restore form widget state from a saved submission JSON and trigger rerun."""
+    path = _SUBMISSIONS_DIR / filename
+    if not path.exists():
+        st.error("Submission file not found.")
+        return
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    for k, v in data.get("session_state", {}).items():
+        # Re-hydrate date strings for date_input widgets
+        if k in _DATE_INPUT_KEYS or (
+            isinstance(k, str) and (k.endswith("_expected_date") or k.endswith("_start") or k.endswith("_end"))
+        ):
+            if isinstance(v, str):
+                try:
+                    from datetime import date as _date
+                    v = _date.fromisoformat(v)
+                except ValueError:
+                    pass
+        st.session_state[k] = v
+    st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PAGE: New Requirement Form
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1501,6 +1797,23 @@ def render_main_form():
         "New Requirement Form",
         "Capture complete client crawl requirements for project planning and scoping."
     )
+
+    # ── Load Previous Submission ───────────────────────────────────────────
+    _saved = list_submissions()
+    if _saved:
+        with st.expander("📂  Load a previous submission", expanded=False):
+            _options = {
+                f"{s['client_name']}  ·  {s['saved_at'][:16].replace('T', ' ')}  (by {s['saved_by']})": s["filename"]
+                for s in _saved
+            }
+            _chosen_label = st.selectbox(
+                "Select submission to load",
+                list(_options.keys()),
+                key="_load_submission_select",
+                label_visibility="collapsed",
+            )
+            if st.button("⬆️  Load & Edit", key="_load_submission_btn"):
+                load_submission(_options[_chosen_label])
 
     left, right = st.columns([2, 1], gap="large")
     form_data = {}
@@ -1685,6 +1998,11 @@ def render_main_form():
             except Exception as e:
                 st.error(f"PDF generation failed — please try again or contact your admin. ({type(e).__name__})")
                 st.stop()
+            # Save form state so it can be reloaded and edited later
+            try:
+                save_submission(form_data, client_name, st.session_state.get("current_user", ""))
+            except Exception:
+                pass  # never block PDF generation due to a save error
             # _safe_filename strips path-traversal chars from user-supplied client name
             st.session_state["pdf_name"] = _safe_filename(client_name, "_Requirement_Form.pdf")
             celebrate(
