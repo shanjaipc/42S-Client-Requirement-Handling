@@ -1,5 +1,5 @@
-import streamlit as st
-import streamlit.components.v1 as components
+import streamlit as st # type: ignore
+import streamlit.components.v1 as components # type: ignore
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
 from reportlab.lib import colors  # type: ignore
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
@@ -7,7 +7,7 @@ from reportlab.lib import pagesizes  # type: ignore
 from reportlab.lib.units import inch  # type: ignore
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # type: ignore
 from reportlab.lib.colors import HexColor  # type: ignore
-from docx import Document
+from docx import Document # type: ignore
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 import os
@@ -19,7 +19,7 @@ import time
 import json
 import uuid
 from pathlib import Path
-import pandas as pd
+import pandas as pd # type: ignore
 from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
 from analytics import (
     log_event,
@@ -38,7 +38,7 @@ from analytics import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 try:
-    from PIL import Image as _PIL_Image
+    from PIL import Image as _PIL_Image  # type: ignore
     _page_icon = _PIL_Image.open("42slogo_top.png") if os.path.exists("42slogo_top.png") else "🔍"
 except Exception:
     _page_icon = "🔍"
@@ -207,7 +207,21 @@ header button,
 /* ── App background & global font ── */
 .stApp {
     background-color: #f0f2f6;
+    color: #1f2937 !important;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ── Global text colour (markdown, labels, captions) ── */
+.stMarkdown p,
+.stMarkdown li,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+.stMarkdown h4, .stMarkdown h5,
+.element-container p,
+[data-testid="stMainBlockContainer"] > div p,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span,
+.stCaption, .stText {
+    color: #1f2937 !important;
 }
 
 /* ── Main block container spacing ── */
@@ -284,7 +298,7 @@ section[data-testid="stSidebar"] details summary p {
     background: #ffffff !important;
     font-size: 0.875rem !important;
     color: #1f2937 !important;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
     padding: 8px 12px !important;
 }
 .stTextInput > div > div > input:focus,
@@ -305,8 +319,10 @@ section[data-testid="stSidebar"] details summary p {
     border: 1.5px solid #e5e7eb !important;
     background: white !important;
     font-size: 0.875rem !important;
+    color: #1f2937 !important;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
+.stSelectbox > div > div > div { color: #1f2937 !important; }
 .stSelectbox > div > div:focus-within {
     border-color: #374151 !important;
     box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
@@ -317,8 +333,11 @@ section[data-testid="stSidebar"] details summary p {
     border-radius: 8px !important;
     border: 1.5px solid #e5e7eb !important;
     background: white !important;
+    color: #1f2937 !important;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
+.stMultiSelect input { color: #1f2937 !important; }
+.stMultiSelect [data-baseweb="select"] span { color: #1f2937 !important; }
 .stMultiSelect > div > div:focus-within {
     border-color: #374151 !important;
     box-shadow: 0 0 0 3px rgba(55,65,81,0.12) !important;
@@ -351,7 +370,7 @@ div[data-testid="stMainBlockContainer"] .stButton > button[kind="primary"]:hover
     border-radius: 9px !important;
     font-weight: 600 !important;
     font-size: 0.9rem !important;
-    padding: 12px 0 !important;
+    padding: 12px 20px !important;
     width: 100% !important;
     transition: all 0.2s ease !important;
     box-shadow: 0 2px 8px rgba(31,41,55,0.22) !important;
@@ -381,21 +400,58 @@ details[open] {
 }
 
 /* ── Radio ── */
-.stRadio > div { gap: 8px !important; }
-.stRadio > div > label { font-size: 0.875rem !important; }
+.stRadio > label {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: #374151 !important;
+    letter-spacing: 0.01em !important;
+}
+.stRadio > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+}
+.stRadio > div > label {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    color: #374151 !important;
+    cursor: pointer !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+}
+.stRadio > div > label > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+.stRadio label p {
+    margin: 0 !important;
+    line-height: 1 !important;
+    color: #374151 !important;
+}
 
 /* ── Date input ── */
 .stDateInput > div > div > input {
     border-radius: 8px !important;
     border: 1.5px solid #e5e7eb !important;
+    background: #ffffff !important;
     font-size: 0.875rem !important;
+    color: #1f2937 !important;
     padding: 8px 12px !important;
 }
 
 /* ── Labels ── */
 .stTextInput label, .stTextArea label, .stSelectbox label,
-.stMultiSelect label, .stNumberInput label, .stDateInput label {
-    font-size: 0.8rem !important;
+.stMultiSelect label, .stNumberInput label, .stDateInput label,
+.stRadio > label {
+    font-size: 0.875rem !important;
     font-weight: 600 !important;
     color: #374151 !important;
     letter-spacing: 0.01em !important;
@@ -418,7 +474,7 @@ hr {
 }
 
 /* ── Markdown bold ── */
-.stMarkdown strong { color: #111827; font-weight: 600; }
+.stMarkdown strong { color: #111827 !important; font-weight: 600 !important; }
 
 /* ── Tag chips in multiselect ── */
 .stMultiSelect span[data-baseweb="tag"] {
@@ -427,6 +483,11 @@ hr {
     color: #1f2937 !important;
     font-size: 0.78rem !important;
 }
+.stMultiSelect span[data-baseweb="tag"] button { color: #6b7280 !important; }
+.stMultiSelect input::placeholder { color: #b0b7c3 !important; }
+
+/* ── Number input ── */
+.stNumberInput > div > div > input { color: #1f2937 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -594,7 +655,240 @@ def domain_selector(label, key_prefix):
     with col2:
         custom = st.text_input("Custom", placeholder="+ Add domain", key=f"{key_prefix}_custom_domain", label_visibility="collapsed")
     domains = selected + ([custom.strip()] if custom.strip() else [])
-    return ", ".join(domains) if domains else ""
+    return ", ".join(domains) if domains else "", domains
+
+
+def _safe_key(s):
+    """Return a Streamlit-safe widget key fragment from an arbitrary string."""
+    return re.sub(r'[^a-zA-Z0-9]', '_', s)
+
+
+# ── Per-module crawl-config helpers ──────────────────────────────────────────
+# Each helper renders config widgets and returns a flat dict.
+# key_suffix is appended to every widget key so per-domain instances don't clash.
+
+def _pt_crawl_config(key_suffix=""):
+    cfg = {}
+    crawl_type = st.radio(
+        "Crawl Type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
+        horizontal=True, key=f"pt_crawl_type{key_suffix}"
+    )
+    cfg["Crawl Type"] = crawl_type
+
+    st.markdown("**Overall Crawl Frequency**")
+    freq, hourly = frequency_selector("Overall", f"pt_overall{key_suffix}")
+    cfg["Overall Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+
+    if crawl_type == "Category-based (Category_ES)":
+        st.markdown("---")
+        st.markdown("##### A) Category_ES Configuration")
+
+        st.markdown("**Index Frequency**")
+        c1, c2 = st.columns(2)
+        with c1:
+            pf, ph = frequency_selector("Products Index", f"pt_prod{key_suffix}")
+            cfg["Products Index Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+        with c2:
+            tf, th = frequency_selector("Trends Index", f"pt_trend{key_suffix}")
+            cfg["Trends Index Frequency"] = f"{tf} ({th} times/day)" if th else tf
+
+        if ph or th:
+            cfg["Hourly Crawl Timings"] = st.text_input(
+                "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM",
+                key=f"pt_hourly_timings{key_suffix}"
+            )
+
+        st.markdown("**Trends Configuration**")
+        c1, c2 = st.columns(2)
+        with c1:
+            cfg["No of RSS Crawls"] = st.number_input("Number of RSS crawls into Trends", min_value=0, key=f"pt_rss_crawls{key_suffix}")
+        with c2:
+            cfg["Expected Data Push Volume"] = st.text_input("Products volume to push into Trends", key=f"pt_data_push_volume{key_suffix}")
+
+        st.markdown("**Category Details**")
+        cfg["Sample Category List"] = st.text_area(
+            "Sample Category List", placeholder="e.g., Electronics, Fashion, Home & Kitchen",
+            key=f"pt_sample_category_list{key_suffix}"
+        )
+        cat_status = st.radio("Is final category list available?", ["Yes", "No"], key=f"pt_category_status{key_suffix}", horizontal=True)
+        if cat_status == "Yes":
+            cfg["Client Category Sheet Link"] = st.text_input("Category Sheet Link", key=f"pt_category_sheet_link{key_suffix}")
+        else:
+            cfg["Client Category Expected Date"] = str(st.date_input("Expected date for category list", key=f"pt_category_expected_date{key_suffix}"))
+
+    else:
+        st.markdown("---")
+        st.markdown("##### B) Input-Based Configuration")
+
+        st.markdown("**Products Crawl**")
+        need_product = st.radio("Products crawl required?", ["Yes", "No"], key=f"pt_input_products_needed{key_suffix}", horizontal=True)
+        cfg["Products Crawl Needed"] = need_product
+        if need_product == "Yes":
+            pf, ph = frequency_selector("Products Crawl", f"pt_input_prod{key_suffix}")
+            cfg["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+
+        st.markdown("**Trends Crawl**")
+        tf, th = frequency_selector("Trends Crawl", f"pt_input_trend{key_suffix}")
+        cfg["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else tf
+        if th:
+            cfg["Trends Hourly Timings"] = st.text_input(
+                "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM",
+                key=f"pt_trends_hourly_timings{key_suffix}"
+            )
+
+        st.markdown("**Inputs**")
+        cfg["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs", key=f"pt_sample_input_urls{key_suffix}")
+        inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Link Below"], key=f"pt_inputs_status{key_suffix}", horizontal=True)
+        if inp_status == "Not Yet Provided":
+            cfg["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs", key=f"pt_inputs_expected_date{key_suffix}"))
+        else:
+            cfg["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs", key=f"pt_inputs_sheet_link{key_suffix}")
+
+        st.markdown("**Location Dependency**")
+        is_pincode = st.radio("Pincode / Zipcode based?", ["Yes", "No"], key=f"pt_pincode_based{key_suffix}", horizontal=True)
+        cfg["Pincode Based"] = is_pincode
+        if is_pincode == "Yes":
+            c1, c2 = st.columns(2)
+            with c1:
+                cfg["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001", key=f"pt_sample_pincode{key_suffix}")
+            with c2:
+                cfg["Client Pincode List Link"] = st.text_input("Pincode list link (if available)", key=f"pt_pincode_list_link{key_suffix}")
+
+        st.markdown("**Volume & Output**")
+        c1, c2 = st.columns(2)
+        with c1:
+            cfg["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products", key=f"pt_expected_volume{key_suffix}")
+        with c2:
+            cfg["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key=f"pt_screenshot{key_suffix}", horizontal=True)
+
+    return cfg
+
+
+def _sos_crawl_config(key_suffix=""):
+    cfg = {}
+    cfg["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key=f"sos_zipcode_required{key_suffix}")
+    if cfg["Zipcode Required"] == "Yes":
+        cfg["Pincode List"] = st.text_area(
+            "Pincode list (comma-separated or sheet link)",
+            placeholder="e.g., 110001, 560001, 400001",
+            key=f"sos_pincode_list{key_suffix}"
+        )
+        st.caption("Format: comma-separated pincodes (e.g., 110001, 560001) or paste a sheet link.")
+
+    st.markdown("**Crawl Depth**")
+    c1, c2 = st.columns(2)
+    with c1:
+        cfg["No. of Pages per Keyword"] = st.number_input("Pages per keyword", min_value=1, value=1, key=f"sos_pages{key_suffix}")
+    with c2:
+        cfg["No. of Products per Keyword"] = st.number_input("Products per keyword", min_value=1, value=10, key=f"sos_products{key_suffix}")
+
+    st.markdown("**Crawl Frequency**")
+    freq, hourly = frequency_selector("SOS Crawl", f"sos{key_suffix}")
+    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+    return cfg
+
+
+def _rev_crawl_config(key_suffix=""):
+    cfg = {}
+    st.markdown("**Review Source Type**")
+    cfg["Input Sources"] = st.multiselect(
+        "Where to pull review inputs from *",
+        ["From Products Index", "From Trends Index", "From Review Input URLs", "Category-based Reviews Crawl"],
+        key=f"rev_source{key_suffix}",
+    )
+    if "From Review Input URLs" in cfg["Input Sources"]:
+        cfg["Sample Review URLs"] = st.text_area("Sample review page URLs", placeholder="Provide product review page URLs", key=f"rev_sample_urls{key_suffix}")
+
+    st.markdown("**Frequency**")
+    c1, c2 = st.columns(2)
+    with c1:
+        freq, hourly = frequency_selector("Reviews Crawl", f"rev{key_suffix}")
+        cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+    if hourly:
+        with c2:
+            cfg["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM", key=f"rev_hourly_timings{key_suffix}")
+    return cfg
+
+
+def _pv_crawl_config(key_suffix=""):
+    cfg = {}
+    st.markdown("**Frequency**")
+    freq, hourly = frequency_selector("Price Violation Crawl", f"pv{key_suffix}")
+    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+
+    st.markdown("**Inputs**")
+    cfg["Product URL List"] = st.text_area("Product URL list to monitor *", placeholder="Sample product URLs", key=f"pv_product_url_list{key_suffix}")
+
+    cfg["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key=f"pv_zipcode_required{key_suffix}")
+    if cfg["Zipcode Required"] == "Yes":
+        cfg["Zipcode List"] = st.text_area("Zipcode list", placeholder="e.g., 110001, 560001, 400001", key=f"pv_zipcode_list{key_suffix}")
+
+    cfg["Price Violation Condition"] = st.text_area(
+        "Violation condition / rule",
+        placeholder="e.g., MRP > X, Discount < Y%, price diff > 15%",
+        key=f"pv_violation_condition{key_suffix}"
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        cfg["Sample Inputs Sheet Link"] = st.text_input("Sample inputs sheet link", placeholder="Link to sample data", key=f"pv_sample_inputs_link{key_suffix}")
+    with c2:
+        cfg["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key=f"pv_screenshot{key_suffix}", horizontal=True)
+    return cfg
+
+
+def _storeid_crawl_config(key_suffix=""):
+    cfg = {}
+    c1, _ = st.columns(2)
+    with c1:
+        cfg["Specific Location Required"] = st.radio(
+            "Specific store locations needed?", ["No", "Yes"], horizontal=True, key=f"storeid_location{key_suffix}"
+        )
+    if cfg["Specific Location Required"] == "Yes":
+        cfg["Location Details"] = st.text_area("Location details", placeholder="e.g., Bangalore, Mumbai, Delhi", key=f"storeid_location_details{key_suffix}")
+
+    storeid_status = st.radio("Specific Pincode list available?", ["Yes", "No"], horizontal=True, key=f"storeid_list_status{key_suffix}")
+    if storeid_status == "Yes":
+        cfg["Specific Pincode List Link"] = st.text_input("Pincode list link", key=f"storeid_pincode_list_link{key_suffix}")
+    return cfg
+
+
+def _festive_schedule_config(key_suffix=""):
+    cfg = {}
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        cfg["Frequency Per Day"] = st.number_input("Frequency / day", min_value=1, value=1, key=f"festive_freq{key_suffix}")
+    with c2:
+        cfg["Start Date"] = str(st.date_input("Start Date", key=f"festive_start{key_suffix}"))
+    with c3:
+        cfg["End Date"] = str(st.date_input("End Date", key=f"festive_end{key_suffix}"))
+    return cfg
+
+
+def _apply_domain_config(base_dict, config_mode_key, domain_list, config_fn):
+    """
+    If multiple domains: ask same/different. Render config once (common) or per domain.
+    Merges results into base_dict (per-domain keys prefixed with domain name).
+    """
+    if len(domain_list) > 1:
+        config_mode = st.radio(
+            "Crawl configuration",
+            ["Same config for all domains", "Different config per domain"],
+            key=f"{config_mode_key}_mode",
+            horizontal=True,
+        )
+    else:
+        config_mode = "Same config for all domains"
+
+    if config_mode == "Same config for all domains":
+        cfg = config_fn("")
+        base_dict.update(cfg)
+    else:
+        for domain in domain_list:
+            sk = _safe_key(domain)
+            with st.expander(f"Config for: **{domain}**", expanded=True):
+                cfg = config_fn(f"_{sk}")
+            for k, v in cfg.items():
+                base_dict[f"{domain} — {k}"] = v
 
 
 def validate_required(client_name):
@@ -667,7 +961,14 @@ def render_summary(data):
 
     if "Products + Trends" in data:
         pt = data["Products + Trends"]
-        risk = calculate_risk(pt.get("Overall Frequency"), pt.get("Expected Volume"))
+        # Support both common config ("Overall Frequency") and per-domain config ("domain — Overall Frequency")
+        _overall_freq = pt.get("Overall Frequency") or next(
+            (v for k, v in pt.items() if k.endswith("Overall Frequency")), None
+        )
+        _expected_vol = pt.get("Expected Volume") or next(
+            (v for k, v in pt.items() if k.endswith("Expected Volume")), None
+        )
+        risk = calculate_risk(_overall_freq, _expected_vol)
         if risk:
             st.markdown("---")
             st.markdown("**⚡ Crawl Load Risk**")
@@ -896,7 +1197,7 @@ def render_login():
     st.markdown(f"""<div style="text-align:center;padding:36px 32px 24px 32px;margin:0 -32px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 100%);border-bottom:1px solid #f1f5f9;">
 {logo_html}
 <div style="font-size:1.55rem;font-weight:800;color:#0f172a;letter-spacing:-.035em;line-height:1.15;font-family:'Inter',sans-serif;">Welcome back</div>
-<div style="font-size:0.875rem;color:#64748b;margin-top:9px;font-family:'Inter',sans-serif;line-height:1.55;font-weight:400;">Sign in to access the 42Signals<br>Requirement Handling portal</div>
+<div style="font-size:0.875rem;color:#475569;margin-top:9px;font-family:'Inter',sans-serif;line-height:1.55;font-weight:400;">Sign in to access the 42Signals<br>Requirement Handling portal</div>
 <div style="display:flex;justify-content:center;gap:8px;margin-top:18px;flex-wrap:wrap;">
 <span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px;font-size:0.7rem;color:#475569;font-weight:600;font-family:'Inter',sans-serif;">&#128203; Forms</span>
 <span style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px;font-size:0.7rem;color:#475569;font-weight:600;font-family:'Inter',sans-serif;">&#128202; Feasibility</span>
@@ -917,7 +1218,7 @@ def render_login():
     remaining = int(max(_srv_lockout_until, _ss_lockout) - now)
 
     if locked:
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:12px;padding:15px 18px;margin-bottom:4px;color:#7f1d1d;font-family:'Inter',sans-serif;font-size:.875rem;display:flex;align-items:center;gap:12px;">
+        st.markdown(f"""<div role="alert" style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:12px;padding:15px 18px;margin-bottom:4px;color:#7f1d1d;font-family:'Inter',sans-serif;font-size:.875rem;display:flex;align-items:center;gap:12px;">
 <span style="font-size:1.5rem;flex-shrink:0;">&#128274;</span>
 <div><div style="font-weight:700;margin-bottom:3px;">Account temporarily locked</div>
 <div style="opacity:.8;">Too many failed attempts.<br>Try again in <strong>{remaining // 60}m {remaining % 60}s</strong>.</div>
@@ -944,10 +1245,10 @@ def render_login():
         )
 
         # Failed-attempt inline alert (inside form so it's visible before submit)
-        attempts = st.session_state["failed_attempts"]
+        attempts = st.session_state.get("failed_attempts", 0)
         if attempts > 0:
             left = MAX_ATTEMPTS - attempts
-            st.markdown(f"""<div style="background:linear-gradient(135deg,#fffbeb,#fef9ec);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:11px 15px;color:#78350f;font-size:.82rem;margin-top:4px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:9px;">
+            st.markdown(f"""<div role="alert" style="background:linear-gradient(135deg,#fffbeb,#fef9ec);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px;padding:11px 15px;color:#78350f;font-size:.82rem;margin-top:4px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:9px;">
 <span style="font-size:1rem;flex-shrink:0;">&#9888;&#65039;</span>
 <span>Incorrect credentials &mdash; <strong>{left} attempt{'s' if left != 1 else ''}</strong> left before lockout.</span>
 </div>""", unsafe_allow_html=True)
@@ -1027,10 +1328,10 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown('<hr style="border:none;border-top:1px solid #f0f0f0;margin:0 0 14px 0;">', unsafe_allow_html=True)
+    st.markdown('<hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 14px 0;">', unsafe_allow_html=True)
 
     # Section label
-    st.markdown('<div style="color:#b0b7c3;font-size:0.67rem;text-transform:uppercase;letter-spacing:0.14em;padding:0 6px 10px 6px;font-weight:600;font-family:\'Inter\',sans-serif;">Navigation</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#6b7280;font-size:0.67rem;text-transform:uppercase;letter-spacing:0.14em;padding:0 6px 10px 6px;font-weight:600;font-family:\'Inter\',sans-serif;">Navigation</div>', unsafe_allow_html=True)
 
     # Nav items — SVG icons, consistent active/inactive styling
     _NAV = {
@@ -1084,7 +1385,7 @@ with st.sidebar:
                 st.session_state["page"] = key
                 st.rerun()
 
-    st.markdown('<hr style="border:none;border-top:1px solid #f0f0f0;margin:14px 0 10px 0;">', unsafe_allow_html=True)
+    st.markdown('<hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0 10px 0;">', unsafe_allow_html=True)
 
     # ── Logged-in user info + logout ──────────────────────────────────────────
     display_name = st.session_state.get("display_name") or ""
@@ -1100,11 +1401,11 @@ with st.sidebar:
             width:32px; height:32px; border-radius:50%;
             background:linear-gradient(135deg,#1f2937 0%,#374151 100%);
             display:flex; align-items:center; justify-content:center;
-            font-size:0.8rem; font-weight:700; color:#fff; flex-shrink:0;
+            font-size:0.875rem; font-weight:700; color:#fff; flex-shrink:0;
         ">{_h(display_name[:1].upper()) if display_name else "?"}</div>
         <div>
             <div style="font-size:0.82rem;font-weight:600;color:#111827;">{_h(display_name)}</div>
-            <div style="font-size:0.7rem;color:#9ca3af;margin-top:1px;">Signed in</div>
+            <div style="font-size:0.7rem;color:#6b7280;margin-top:1px;">Signed in</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1126,7 +1427,7 @@ with st.sidebar:
 
     st.markdown("""
     <div style="text-align:center; padding:6px 0 12px 0;">
-        <div style="color:#c9d0d9; font-size:0.68rem; font-family:'Inter',sans-serif; letter-spacing:0.04em;">v1.0 &nbsp;·&nbsp; 42Signals &nbsp;·&nbsp; 2026</div>
+        <div style="color:#9ca3af; font-size:0.68rem; font-family:'Inter',sans-serif; letter-spacing:0.04em;">v1.0 &nbsp;·&nbsp; 42Signals &nbsp;·&nbsp; 2026</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1134,6 +1435,66 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: New Requirement Form
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _field_filled(section, field):
+    """True if field is non-empty directly, or via any per-domain key ('domain — field')."""
+    val = section.get(field)
+    if isinstance(val, list):
+        return bool(val)
+    if val:
+        return True
+    return any(v for k, v in section.items() if k.endswith(f"\u2014 {field}") and v)
+
+
+def _validate_form(form_data, modules):
+    """Return list of error strings for all missing required fields."""
+    errors = []
+
+    if not form_data.get("Client Information", {}).get("Target Market"):
+        errors.append("**Client Information** \u2014 Target Market / Geography is required.")
+
+    if not modules:
+        errors.append("**Modules** \u2014 Select at least one module.")
+
+    if "Products + Trends" in modules:
+        if not form_data.get("Products + Trends", {}).get("Domains"):
+            errors.append("**Products + Trends** \u2014 At least one domain is required.")
+
+    if "SOS (Search on Site)" in modules:
+        sos = form_data.get("SOS (Search on Site)", {})
+        if not sos.get("Domains"):
+            errors.append("**SOS** \u2014 At least one domain is required.")
+        if not int(sos.get("No. of Keywords", 0)):
+            errors.append("**SOS** \u2014 Number of Keywords must be greater than 0.")
+
+    if "Reviews" in modules:
+        rev = form_data.get("Reviews", {})
+        if not rev.get("Domains"):
+            errors.append("**Reviews** \u2014 At least one domain is required.")
+        if not _field_filled(rev, "Input Sources"):
+            errors.append("**Reviews** \u2014 At least one input source must be selected.")
+
+    if "Price Violation" in modules:
+        pv = form_data.get("Price Violation", {})
+        if not pv.get("Domains"):
+            errors.append("**Price Violation** \u2014 At least one domain is required.")
+        if not _field_filled(pv, "Product URL List"):
+            errors.append("**Price Violation** \u2014 Product URL list is required.")
+
+    if "Store ID Crawls" in modules:
+        if not form_data.get("Store ID Crawls", {}).get("Domains"):
+            errors.append("**Store ID Crawls** \u2014 At least one domain is required.")
+
+    if "Festive Sale Crawls" in modules:
+        festive = form_data.get("Festive Sale Crawls", {})
+        if festive.get("Crawl Type") == "Products + Trends Based" and not festive.get("Domains"):
+            errors.append("**Festive Sale Crawls** \u2014 Domains required for Products + Trends Based type.")
+
+    if not form_data.get("Final Alignment", {}).get("Client Core Objective"):
+        errors.append("**Final Alignment** \u2014 Client Core Objective is required.")
+
+    return errors
+
 
 def render_main_form():
     page_title(
@@ -1145,6 +1506,8 @@ def render_main_form():
     form_data = {}
 
     with left:
+
+        st.markdown('<div style="font-size:0.75rem;color:#6b7280;margin-bottom:8px;"><span style="color:#dc2626;font-weight:700;">*</span> Required field</div>', unsafe_allow_html=True)
 
         # ── 1. Client Information ──────────────────────────────────────────
         section_header("👤", "1. Client Information")
@@ -1159,7 +1522,7 @@ def render_main_form():
         with c3:
             completion_date = st.date_input("Expected Completion Date", key="form_completion_date")
         with c4:
-            expected_market = st.text_input("Target Market / Geography", placeholder="e.g., India, Southeast Asia", key="form_target_market")
+            expected_market = st.text_input("Target Market / Geography *", placeholder="e.g., India, Southeast Asia", key="form_target_market")
 
         form_data["Client Information"] = {
             "Client Name":            client_name,
@@ -1174,11 +1537,13 @@ def render_main_form():
         section_header("🧩", "2. Modules to Crawl")
 
         modules = st.multiselect(
-            "Select the modules required for this client",
+            "Select the modules required for this client *",
             ["Products + Trends", "SOS (Search on Site)", "Reviews",
              "Price Violation", "Store ID Crawls", "Festive Sale Crawls"],
             key="form_modules",
         )
+        if not modules:
+            st.info("Select at least one module above to configure its settings.")
         form_data["Modules Selected"] = {
             "Selected Modules": ", ".join(modules) if modules else "None"
         }
@@ -1188,101 +1553,9 @@ def render_main_form():
             section_header("📦", "3. Products + Trends Module")
             pt = {}
 
-            st.markdown("**Crawl Type**")
-            crawl_type = st.radio(
-                "crawl_type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
-                label_visibility="collapsed", horizontal=True, key="pt_crawl_type"
-            )
-            pt["Crawl Type"] = crawl_type
+            pt["Domains"], _pt_domains = domain_selector("Domains *", "pt")
 
-            st.markdown("**Domains**")
-            pt["Domains"] = domain_selector("Select Domains", "pt")
-
-            st.markdown("**Overall Crawl Frequency**")
-            freq, hourly = frequency_selector("Overall", "pt_overall")
-            pt["Overall Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
-
-            if crawl_type == "Category-based (Category_ES)":
-                st.markdown("---")
-                st.markdown("##### A) Category_ES Configuration")
-
-                st.markdown("**Index Frequency**")
-                c1, c2 = st.columns(2)
-                with c1:
-                    pf, ph = frequency_selector("Products Index", "pt_prod")
-                    pt["Products Index Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
-                with c2:
-                    tf, th = frequency_selector("Trends Index", "pt_trend")
-                    pt["Trends Index Frequency"] = f"{tf} ({th} times/day)" if th else tf
-
-                if ph or th:
-                    pt["Hourly Crawl Timings"] = st.text_input(
-                        "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM",
-                        key="pt_hourly_timings"
-                    )
-
-                st.markdown("**Trends Configuration**")
-                c1, c2 = st.columns(2)
-                with c1:
-                    pt["No of RSS Crawls"] = st.number_input("Number of RSS crawls into Trends", min_value=0, key="pt_rss_crawls")
-                with c2:
-                    pt["Expected Data Push Volume"] = st.text_input("Products volume to push into Trends", key="pt_data_push_volume")
-
-                st.markdown("**Category Details**")
-                pt["Sample Category List"] = st.text_area(
-                    "Sample Category List", placeholder="e.g., Electronics, Fashion, Home & Kitchen",
-                    key="pt_sample_category_list"
-                )
-                cat_status = st.radio("Is final category list available?", ["Yes", "No"], key="pt_category_status", horizontal=True)
-                if cat_status == "Yes":
-                    pt["Client Category Sheet Link"] = st.text_input("Category Sheet Link", key="pt_category_sheet_link")
-                else:
-                    pt["Client Category Expected Date"] = str(st.date_input("Expected date for category list", key="pt_category_expected_date"))
-
-            else:
-                st.markdown("---")
-                st.markdown("##### B) Input-Based Configuration")
-
-                st.markdown("**Products Crawl**")
-                need_product = st.radio("Products crawl required?", ["Yes", "No"], key="pt_input_products_needed", horizontal=True)
-                pt["Products Crawl Needed"] = need_product
-                if need_product == "Yes":
-                    pf, ph = frequency_selector("Products Crawl", "pt_input_prod")
-                    pt["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
-
-                st.markdown("**Trends Crawl**")
-                tf, th = frequency_selector("Trends Crawl", "pt_input_trend")
-                pt["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else tf
-                if th:
-                    pt["Trends Hourly Timings"] = st.text_input(
-                        "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM",
-                        key="pt_trends_hourly_timings"
-                    )
-
-                st.markdown("**Inputs**")
-                pt["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs", key="pt_sample_input_urls")
-                inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Link Below"], key="pt_inputs_status", horizontal=True)
-                if inp_status == "Not Yet Provided":
-                    pt["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs", key="pt_inputs_expected_date"))
-                else:
-                    pt["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs", key="pt_inputs_sheet_link")
-
-                st.markdown("**Location Dependency**")
-                is_pincode = st.radio("Pincode / Zipcode based?", ["Yes", "No"], key="pt_pincode_based", horizontal=True)
-                pt["Pincode Based"] = is_pincode
-                if is_pincode == "Yes":
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        pt["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001", key="pt_sample_pincode")
-                    with c2:
-                        pt["Client Pincode List Link"] = st.text_input("Pincode list link (if available)", key="pt_pincode_list_link")
-
-                st.markdown("**Volume & Output**")
-                c1, c2 = st.columns(2)
-                with c1:
-                    pt["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products", key="pt_expected_volume")
-                with c2:
-                    pt["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pt_screenshot", horizontal=True)
+            _apply_domain_config(pt, "pt", _pt_domains, _pt_crawl_config)
 
             st.markdown("**Specific Fields to Capture**")
             pt["Specific Fields"] = st.text_area(
@@ -1300,7 +1573,7 @@ def render_main_form():
             st.markdown("**Keywords**")
             c1, c2 = st.columns(2)
             with c1:
-                sos["No. of Keywords"] = st.number_input("Number of Keywords", min_value=0, key="sos_keyword_count")
+                sos["No. of Keywords"] = st.number_input("Number of Keywords *", min_value=0, key="sos_keyword_count")
             with c2:
                 keywords_source = st.radio("Keywords source", ["Client Provided", "Provide Sample for Testing"], key="sos_keywords_source")
             if keywords_source == "Client Provided":
@@ -1308,25 +1581,9 @@ def render_main_form():
             else:
                 sos["Sample Keywords"] = st.text_area("Sample keywords for testing", placeholder="e.g., laptop, shoes, home appliances", key="sos_sample_keywords")
 
-            st.markdown("**Domains**")
-            sos["Domains"] = domain_selector("Select Domains", "sos")
+            sos["Domains"], _sos_domains = domain_selector("Domains *", "sos")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                sos["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="sos_zipcode_required")
-            if sos["Zipcode Required"] == "Yes":
-                sos["Pincode List"] = st.text_area("Pincode list (comma-separated or sheet link)", placeholder="e.g., 110001, 560001, 400001", key="sos_pincode_list")
-
-            st.markdown("**Crawl Depth**")
-            c1, c2 = st.columns(2)
-            with c1:
-                sos["No. of Pages per Keyword"] = st.number_input("Pages per keyword", min_value=1, value=1, key="sos_pages")
-            with c2:
-                sos["No. of Products per Keyword"] = st.number_input("Products per keyword", min_value=1, value=10, key="sos_products")
-
-            st.markdown("**Crawl Frequency**")
-            freq, hourly = frequency_selector("SOS Crawl", "sos")
-            sos["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+            _apply_domain_config(sos, "sos", _sos_domains, _sos_crawl_config)
             form_data["SOS (Search on Site)"] = sos
 
         # ── 5. Reviews Module ─────────────────────────────────────────────
@@ -1334,26 +1591,9 @@ def render_main_form():
             section_header("⭐", "5. Reviews Module")
             rev = {}
 
-            st.markdown("**Domains**")
-            rev["Domains"] = domain_selector("Select Domains", "reviews")
+            rev["Domains"], _rev_domains = domain_selector("Domains *", "reviews")
 
-            st.markdown("**Review Source Type**")
-            rev["Input Sources"] = st.multiselect(
-                "Where to pull review inputs from",
-                ["From Products Index", "From Trends Index", "From Review Input URLs", "Category-based Reviews Crawl"],
-                key="rev_source",
-            )
-            if "From Review Input URLs" in rev["Input Sources"]:
-                rev["Sample Review URLs"] = st.text_area("Sample review page URLs", placeholder="Provide product review page URLs", key="rev_sample_urls")
-
-            st.markdown("**Frequency**")
-            c1, c2 = st.columns(2)
-            with c1:
-                freq, hourly = frequency_selector("Reviews Crawl", "rev")
-                rev["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
-            if hourly:
-                with c2:
-                    rev["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM", key="rev_hourly_timings")
+            _apply_domain_config(rev, "rev", _rev_domains, _rev_crawl_config)
             form_data["Reviews"] = rev
 
         # ── 6. Price Violation Module ─────────────────────────────────────
@@ -1361,32 +1601,9 @@ def render_main_form():
             section_header("💰", "6. Price Violation Module")
             pv = {}
 
-            st.markdown("**Domains**")
-            pv["Domains"] = domain_selector("Select Domains", "pv")
+            pv["Domains"], _pv_domains = domain_selector("Domains *", "pv")
 
-            st.markdown("**Frequency**")
-            freq, hourly = frequency_selector("Price Violation Crawl", "pv")
-            pv["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
-
-            st.markdown("**Inputs**")
-            pv["Product URL List"] = st.text_area("Product URL list to monitor", placeholder="Sample product URLs", key="pv_product_url_list")
-
-            c1, c2 = st.columns(2)
-            with c1:
-                pv["Zipcode Required"] = st.radio("Zipcode required?", ["Yes", "No"], horizontal=True, key="pv_zipcode_required")
-            if pv["Zipcode Required"] == "Yes":
-                pv["Zipcode List"] = st.text_area("Zipcode list", placeholder="e.g., 110001, 560001, 400001", key="pv_zipcode_list")
-
-            pv["Price Violation Condition"] = st.text_area(
-                "Violation condition / rule",
-                placeholder="e.g., MRP > X, Discount < Y%, price diff > 15%",
-                key="pv_violation_condition"
-            )
-            c1, c2 = st.columns(2)
-            with c1:
-                pv["Sample Inputs Sheet Link"] = st.text_input("Sample inputs sheet link", placeholder="Link to sample data", key="pv_sample_inputs_link")
-            with c2:
-                pv["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key="pv_screenshot", horizontal=True)
+            _apply_domain_config(pv, "pv", _pv_domains, _pv_crawl_config)
             form_data["Price Violation"] = pv
 
         # ── 7. Store ID Crawls ────────────────────────────────────────────
@@ -1394,20 +1611,9 @@ def render_main_form():
             section_header("🏪", "7. Store ID Crawl")
             storeid = {}
 
-            st.markdown("**Domains**")
-            storeid["Domains"] = domain_selector("Select Domains", "storeid")
+            storeid["Domains"], _storeid_domains = domain_selector("Domains *", "storeid")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                storeid["Specific Location Required"] = st.radio(
-                    "Specific store locations needed?", ["No", "Yes"], horizontal=True, key="storeid_location"
-                )
-            if storeid["Specific Location Required"] == "Yes":
-                storeid["Location Details"] = st.text_area("Location details", placeholder="e.g., Bangalore, Mumbai, Delhi", key="storeid_location_details")
-
-            storeid_status = st.radio("Specific Pincode list available?", ["Yes", "No"], horizontal=True, key="storeid_list_status")
-            if storeid_status == "Yes":
-                storeid["Specific Pincode List Link"] = st.text_input("Pincode list link", key="storeid_pincode_list_link")
+            _apply_domain_config(storeid, "storeid", _storeid_domains, _storeid_crawl_config)
             form_data["Store ID Crawls"] = storeid
 
         # ── 8. Festive Sale Crawls ────────────────────────────────────────
@@ -1415,32 +1621,29 @@ def render_main_form():
             section_header("🎉", "8. Festive Sale Crawls")
             festive = {}
 
-            st.markdown("**Crawl Type**")
             festive["Crawl Type"] = st.radio(
-                "festive_type",
+                "Crawl Type",
                 ["Products + Trends Based", "SOS Type", "Category URL Based"],
-                key="festive_type", horizontal=True, label_visibility="collapsed",
+                key="festive_type", horizontal=True,
             )
             if festive["Crawl Type"] == "Products + Trends Based":
-                festive["Domains"] = domain_selector("Select Domains", "festive")
+                festive["Domains"], _festive_domains = domain_selector("Domains *", "festive")
+                st.markdown("**Schedule**")
+                _apply_domain_config(festive, "festive", _festive_domains, _festive_schedule_config)
             elif festive["Crawl Type"] == "Category URL Based":
                 festive["Category URL List"] = st.text_area("Category URLs", placeholder="Provide category URLs for festive crawl", key="festive_category_urls")
-
-            st.markdown("**Schedule**")
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                festive["Frequency Per Day"] = st.number_input("Frequency / day", min_value=1, value=1, key="festive_freq")
-            with c2:
-                festive["Start Date"] = str(st.date_input("Start Date", key="festive_start"))
-            with c3:
-                festive["End Date"] = str(st.date_input("End Date", key="festive_end"))
+                st.markdown("**Schedule**")
+                festive.update(_festive_schedule_config())
+            else:
+                st.markdown("**Schedule**")
+                festive.update(_festive_schedule_config())
             form_data["Festive Sale Crawls"] = festive
 
         # ── 9. Final Alignment ────────────────────────────────────────────
         section_header("🎯", "9. Final Alignment")
         form_data["Final Alignment"] = {
             "Client Core Objective": st.text_area(
-                "What is the client's core objective?",
+                "What is the client's core objective? *",
                 placeholder="e.g., Market gap analysis, brand monitoring, competitive pricing intelligence, demand trends…",
                 key="final_objective",
             ),
@@ -1465,10 +1668,23 @@ def render_main_form():
 
         # PDF Generation
         if st.button("⬇️  Generate & Download PDF", type="primary", use_container_width=True):
+            if not client_name:
+                st.error("Enter a Client Name before generating the PDF.")
+                st.stop()
+            _errors = _validate_form(form_data, modules)
+            if _errors:
+                st.error("Please fix the following before generating the PDF:")
+                for _e in _errors:
+                    st.markdown(f"- {_e}")
+                st.stop()
             log_event(EVENT_GENERATE_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main", {"client": client_name})
-            with st.spinner("Building PDF…"):
-                pdf_bytes = generate_pdf(form_data, client_name).read()
-            st.session_state["pdf_bytes"] = pdf_bytes
+            try:
+                with st.spinner("Building PDF…"):
+                    pdf_bytes = generate_pdf(form_data, client_name).read()
+                st.session_state["pdf_bytes"] = pdf_bytes
+            except Exception as e:
+                st.error(f"PDF generation failed — please try again or contact your admin. ({type(e).__name__})")
+                st.stop()
             # _safe_filename strips path-traversal chars from user-supplied client name
             st.session_state["pdf_name"] = _safe_filename(client_name, "_Requirement_Form.pdf")
             celebrate(
@@ -1496,6 +1712,12 @@ def render_main_form():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_feasibility():
+    # Clear any previously generated doc when the page is freshly visited
+    # so stale downloads from earlier sessions don't persist.
+    if st.session_state.get("analytics_last_page") != "feasibility":
+        st.session_state.pop("feas_doc", None)
+        st.session_state.pop("feas_name", None)
+
     page_title(
         "Feasibility Assessment",
         "Evaluate crawl feasibility before project kickoff — exports a Word document for the team."
@@ -1597,50 +1819,53 @@ def render_feasibility():
         # Generate document
         if st.button("📄  Generate Feasibility Document", type="primary", use_container_width=True):
             if not client_name:
-                st.warning("Please enter a Client Name before generating.")
+                st.error("Enter a Client Name before generating the document.")
+                st.stop()
             else:
                 log_event(EVENT_GENERATE_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility", {"client": client_name})
-                with st.spinner("Building document…"):
-                    doc = Document()
-                    doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
+                try:
+                    with st.spinner("Building document…"):
+                        doc = Document()
+                        doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
 
-                    doc.add_heading("Requirement Information", level=2)
-                    doc.add_paragraph(f"Client Name: {client_name}")
-                    doc.add_paragraph(f"Requestor Name: {requestor_name}")
+                        doc.add_heading("Requirement Information", level=2)
+                        doc.add_paragraph(f"Client Name: {client_name}")
+                        doc.add_paragraph(f"Requestor Name: {requestor_name}")
 
-                    doc.add_heading("Domains", level=2)
-                    for d in domains:
-                        doc.add_paragraph(d, style="List Bullet")
+                        doc.add_heading("Domains", level=2)
+                        for d in domains:
+                            doc.add_paragraph(d, style="List Bullet")
 
-                    doc.add_heading("Crawl Configuration", level=2)
-                    doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
-                    doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
-                    if others_desc:
-                        doc.add_paragraph(f"Others: {others_desc}")
+                        doc.add_heading("Crawl Configuration", level=2)
+                        doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
+                        doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
+                        if others_desc:
+                            doc.add_paragraph(f"Others: {others_desc}")
 
-                    doc.add_heading("Zipcode Requirement", level=2)
-                    doc.add_paragraph(f"Zipcode Handling: {zipcode_type}")
-                    if zipcode_type in ["With Zipcode", "Both"]:
-                        doc.add_heading("Target Location", level=2)
-                        doc.add_paragraph(f"City: {target_city}")
-                        doc.add_paragraph(f"State: {target_state}")
-                        doc.add_paragraph(f"Country: {target_country}")
+                        doc.add_heading("Zipcode Requirement", level=2)
+                        doc.add_paragraph(f"Zipcode Handling: {zipcode_type}")
+                        if zipcode_type in ["With Zipcode", "Both"]:
+                            doc.add_heading("Target Location", level=2)
+                            doc.add_paragraph(f"City: {target_city}")
+                            doc.add_paragraph(f"State: {target_state}")
+                            doc.add_paragraph(f"Country: {target_country}")
 
-                    doc.add_heading("Additional Notes", level=2)
-                    doc.add_paragraph(additional_notes or "None")
+                        doc.add_heading("Additional Notes", level=2)
+                        doc.add_paragraph(additional_notes or "None")
 
-                    buf = BytesIO()
-                    doc.save(buf)
-                    buf.seek(0)
+                        buf = BytesIO()
+                        doc.save(buf)
+                        buf.seek(0)
 
-                st.session_state["feas_doc"]  = buf.getvalue()
-                # _safe_filename strips path-traversal chars from user-supplied client name
-                st.session_state["feas_name"] = _safe_filename(client_name, "_Feasibility_Requirement.docx")
-                celebrate(
-                    message="Feasibility Document generated!",
-                    sub=f"{_h(client_name)} feasibility doc is ready to download."
-                )
-                st.toast("Document ready! Click below to download.", icon="🎉")
+                    st.session_state["feas_doc"]  = buf.getvalue()
+                    st.session_state["feas_name"] = _safe_filename(client_name, "_Feasibility_Requirement.docx")
+                    celebrate(
+                        message="Feasibility Document generated!",
+                        sub=f"{_h(client_name)} feasibility doc is ready to download."
+                    )
+                    st.toast("Document ready! Click below to download.", icon="🎉")
+                except Exception as e:
+                    st.error(f"Document generation failed — please try again or contact your admin. ({type(e).__name__})")
 
         if st.session_state.get("feas_doc"):
             if st.download_button(
@@ -2776,7 +3001,7 @@ def render_cost_calculator():
                 {display_name}
                 <span style="font-size:0.75rem;font-weight:400;color:#9ca3af;margin-left:6px;">({domain})</span>
             </div>
-            <div style="font-size:0.9rem;font-weight:700;color:#fbbf24;">
+            <div style="font-size:0.9rem;font-weight:700;color:#fde68a;">
                 Platform Total: ${domain_total:,.4f}
             </div>
         </div>""", unsafe_allow_html=True)
@@ -3069,7 +3294,7 @@ else:
             <div style="font-size:1.2rem;font-weight:700;color:#1f2937;margin-bottom:4px;">External Tools &amp; Dashboards</div>
             <div style="font-size:0.82rem;color:#9ca3af;">Quick access to external platforms used by the team.</div>
         </div>
-        <hr style="border:none;border-top:1px solid #f0f0f0;margin:12px 0 24px 0;">
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0 24px 0;">
         """, unsafe_allow_html=True)
 
         _EXT_TOOLS = [
