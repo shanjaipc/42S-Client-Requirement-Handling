@@ -511,7 +511,7 @@ details[open] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
 }
 
-/* ── Radio ── */
+/* ── Radio — rectangular pill buttons ── */
 .stRadio > label {
     font-size: 0.875rem !important;
     font-weight: 600 !important;
@@ -523,37 +523,46 @@ details[open] {
     flex-direction: row !important;
     align-items: center !important;
     flex-wrap: wrap !important;
-    gap: 16px !important;
+    gap: 8px !important;
 }
 .stRadio > div > label {
-    display: flex !important;
-    flex-direction: row !important;
+    display: inline-flex !important;
     align-items: center !important;
-    gap: 6px !important;
-    font-size: 0.875rem !important;
-    font-weight: 400 !important;
+    justify-content: center !important;
+    padding: 6px 14px !important;
+    border-radius: 6px !important;
+    border: 1.5px solid #c9cfd8 !important;
+    background: #ffffff !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
     color: #374151 !important;
     cursor: pointer !important;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
     margin: 0 !important;
     line-height: 1 !important;
 }
+.stRadio > div > label:hover {
+    background: #f1f5f9 !important;
+    border-color: #9ca3af !important;
+}
+.stRadio > div > label:has(input:checked) {
+    background: #1f2937 !important;
+    border-color: #1f2937 !important;
+    color: #ffffff !important;
+}
+/* Hide the native round radio circle */
 .stRadio > div > label > div:first-child {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
+    display: none !important;
 }
 .stRadio label p {
     margin: 0 !important;
     line-height: 1 !important;
-    color: #374151 !important;
+    color: inherit !important;
 }
-/* Radio keyboard focus — visible outline for accessibility */
-.stRadio input[type="radio"]:focus-visible + div,
-.stRadio [data-baseweb="radio"]:focus-within {
+/* Radio keyboard focus */
+.stRadio > div > label:has(input:focus-visible) {
     outline: 2px solid #374151 !important;
     outline-offset: 2px !important;
-    border-radius: 50% !important;
 }
 
 /* ── Date input ── */
@@ -676,14 +685,8 @@ if "cc_show_results"        not in st.session_state: st.session_state["cc_show_r
 if "analytics_sid"          not in st.session_state: st.session_state["analytics_sid"]          = str(uuid.uuid4())
 if "analytics_last_page"    not in st.session_state: st.session_state["analytics_last_page"]    = ""
 
-# Restore session on reload using URL token (not shared with incognito/other browsers)
-if not st.session_state["authenticated"]:
-    _sid = st.query_params.get("sid", "")
-    _sess_user, _sess_display = _load_session(_sid)
-    if _sess_user:
-        st.session_state["authenticated"] = True
-        st.session_state["current_user"]  = _sess_user
-        st.session_state["display_name"]  = _sess_display
+# Session is maintained via st.session_state only (per browser tab).
+# No URL-based token restoration — tokens in URLs are shareable and insecure.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -787,7 +790,7 @@ def info_row(label, value):
 def frequency_selector(label, key_prefix):
     col1, col2 = st.columns([1, 1])
     with col1:
-        freq = st.selectbox(f"{label} — Frequency", ["Daily", "Hourly"], key=f"{key_prefix}_freq")
+        freq = st.selectbox(f"{label} — Frequency", ["Daily", "Weekly", "Monthly", "Hourly"], key=f"{key_prefix}_freq")
     hourly_count = None
     if freq == "Hourly":
         with col2:
@@ -927,7 +930,7 @@ def _pt_crawl_config(key_suffix=""):
 
         st.markdown("**Inputs**")
         cfg["Sample Input URLs"] = st.text_area("Sample Input URLs", placeholder="If client inputs not available, provide testing URLs", key=f"pt_sample_input_urls{key_suffix}")
-        inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Link Below"], key=f"pt_inputs_status{key_suffix}", horizontal=True)
+        inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Sheet Link Below"], key=f"pt_inputs_status{key_suffix}", horizontal=True)
         if inp_status == "Not Yet Provided":
             cfg["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs", key=f"pt_inputs_expected_date{key_suffix}"))
         else:
@@ -1485,8 +1488,7 @@ def render_login():
             _new_analytics_sid = str(uuid.uuid4())
             st.session_state["analytics_sid"] = _new_analytics_sid
             log_event(EVENT_LOGIN, clean_user, _new_analytics_sid)
-            _sid = _save_session(clean_user, display_name)
-            st.query_params["sid"] = _sid
+            _save_session(clean_user, display_name)
             st.rerun()
         else:
             new_attempts = _srv_attempts + 1
@@ -1647,11 +1649,6 @@ _SUBMISSIONS_DIR = Path("submissions")
 _FORM_KEY_PREFIXES = (
     "form_", "pt_", "sos_", "rev_", "pv_", "storeid_", "festive_", "final_",
 )
-# Keys used by date_input widgets — need converting back to datetime.date on load
-_DATE_INPUT_KEYS = {
-    "form_completion_date", "pt_category_expected_date", "pt_inputs_expected_date",
-    "festive_start", "festive_end",
-}
 
 
 def _json_default(obj):
@@ -1683,10 +1680,13 @@ def save_submission(form_data: dict, client_name: str, username: str) -> None:
     }
     with open(_SUBMISSIONS_DIR / filename, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, default=_json_default)
+    list_submissions.clear()  # invalidate cache so the new file appears immediately
 
 
+@st.cache_data(ttl=60)
 def list_submissions() -> list[dict]:
-    """Return list of submission metadata dicts, newest first."""
+    """Return list of submission metadata dicts, newest first.
+    Cached for 60 s so repeated reruns don't re-read the filesystem."""
     if not _SUBMISSIONS_DIR.exists():
         return []
     result = []
@@ -1713,17 +1713,16 @@ def load_submission(filename: str) -> None:
         return
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
+    _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
     for k, v in data.get("session_state", {}).items():
-        # Re-hydrate date strings for date_input widgets
-        if k in _DATE_INPUT_KEYS or (
-            isinstance(k, str) and (k.endswith("_expected_date") or k.endswith("_start") or k.endswith("_end"))
-        ):
-            if isinstance(v, str):
-                try:
-                    from datetime import date as _date
-                    v = _date.fromisoformat(v)
-                except ValueError:
-                    pass
+        # Re-hydrate any ISO date string back to datetime.date.
+        # Per-domain date keys get a suffix (e.g. pt_inputs_expected_date_swiggy_com)
+        # so key-name matching is unreliable — match on value shape instead.
+        if isinstance(v, str) and _ISO_DATE_RE.match(v):
+            try:
+                v = date.fromisoformat(v)
+            except ValueError:
+                pass
         st.session_state[k] = v
     st.rerun()
 
@@ -2010,6 +2009,10 @@ def render_main_form():
                 sub=f"{_h(client_name)} Requirement Form is ready to download."
             )
             st.toast("PDF ready! Click below to download.", icon="🎉")
+            components.html(
+                "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
+                height=0,
+            )
 
         if st.session_state.get("pdf_bytes"):
             if st.download_button(
@@ -3235,6 +3238,10 @@ def render_cost_calculator():
     with btn_col:
         if st.button("📊  Generate Estimate", use_container_width=True, type="primary"):
             st.session_state["cc_show_results"] = True
+            components.html(
+                "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
+                height=0,
+            )
 
     if not st.session_state.get("cc_show_results"):
         return
