@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import streamlit as st  # type: ignore
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +88,8 @@ def log_event(
     try:
         with _ANALYTICS_FILE.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record) + "\n")
+        load_events.clear()
+        get_summary.clear()
     except OSError:
         pass
 
@@ -94,6 +98,7 @@ def log_event(
 # READ
 # ─────────────────────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=30)
 def load_events(days: int = 30) -> List[Dict]:
     """Load all events logged within the last *days* days (UTC).
     Malformed lines are silently skipped."""
@@ -123,6 +128,7 @@ def load_events(days: int = 30) -> List[Dict]:
 # AGGREGATE
 # ─────────────────────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=30)
 def get_summary(days: int = 30) -> dict:
     """Return an aggregated analytics summary dict for the given look-back window."""
     events = load_events(days)
