@@ -81,15 +81,3 @@
 {"ts": "2026-03-18T16:37:19.532345+00:00", "session_id": "c8099fbe-9671-4565-92df-dd5638000261", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
 {"ts": "2026-03-18T16:38:42.877102+00:00", "session_id": "c8099fbe-9671-4565-92df-dd5638000261", "username": "shanjai", "event": "generate_req_pdf", "page": "main", "details": {"client": "Unilever IN"}}
 {"ts": "2026-03-18T16:38:47.433561+00:00", "session_id": "c8099fbe-9671-4565-92df-dd5638000261", "username": "shanjai", "event": "download_req_pdf", "page": "main", "details": {}}
-{"ts": "2026-03-22T18:23:10.472792+00:00", "session_id": "c9e0b012-6221-47e6-8fbd-7ab6ec8bb8c0", "username": "shanjai", "event": "login", "page": "", "details": {}}
-{"ts": "2026-03-22T18:23:10.513985+00:00", "session_id": "c9e0b012-6221-47e6-8fbd-7ab6ec8bb8c0", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
-{"ts": "2026-03-22T18:23:12.278041+00:00", "session_id": "c9e0b012-6221-47e6-8fbd-7ab6ec8bb8c0", "username": "shanjai", "event": "page_view", "page": "feasibility", "details": {}}
-{"ts": "2026-03-22T18:23:13.421447+00:00", "session_id": "c9e0b012-6221-47e6-8fbd-7ab6ec8bb8c0", "username": "shanjai", "event": "page_view", "page": "req_flow", "details": {}}
-{"ts": "2026-03-22T18:38:52.878711+00:00", "session_id": "737c26e1-1dbc-49b4-90a1-ec8cad17db04", "username": "shanjai", "event": "login", "page": "", "details": {}}
-{"ts": "2026-03-22T18:38:52.931845+00:00", "session_id": "737c26e1-1dbc-49b4-90a1-ec8cad17db04", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
-{"ts": "2026-03-22T18:38:58.666967+00:00", "session_id": "0c39087a-95f2-4db3-8c55-3b73bd90389e", "username": "shanjai", "event": "login", "page": "", "details": {}}
-{"ts": "2026-03-22T18:38:58.719418+00:00", "session_id": "0c39087a-95f2-4db3-8c55-3b73bd90389e", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
-{"ts": "2026-03-23T06:56:01.956675+00:00", "session_id": "9d8f0973-3c26-463c-83d4-d42e9479a26c", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
-{"ts": "2026-03-23T06:56:05.407395+00:00", "session_id": "7de9820e-bd50-47e4-bb06-19088d197968", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
-{"ts": "2026-03-23T06:56:13.348866+00:00", "session_id": "71f38ff6-f47f-4361-98b8-3e7c4d97ddc4", "username": "shanjai", "event": "login", "page": "", "details": {}}
-{"ts": "2026-03-23T06:56:13.395463+00:00", "session_id": "71f38ff6-f47f-4361-98b8-3e7c4d97ddc4", "username": "shanjai", "event": "page_view", "page": "main", "details": {}}
