@@ -50,7 +50,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-LOGO_PATH = "42slogo.png"
+LOGO_PATH = str(Path(__file__).parent / "42slogo.png")
 
 # Bidirectional component for secure localStorage-based session persistence.
 _session_mgr = components.declare_component(
@@ -1007,6 +1007,13 @@ def _pt_crawl_config(key_suffix=""):
             with c2:
                 cfg["Client Pincode List Link"] = st.text_input("Pincode list link (if available)", key=f"pt_pincode_list_link{key_suffix}")
 
+        st.markdown("**Crawl Duration**")
+        c1, c2 = st.columns(2)
+        with c1:
+            cfg["Crawl Start Date"] = str(st.date_input("Start Date", key=f"pt_crawl_start_date{key_suffix}"))
+        with c2:
+            cfg["Crawl End Date"] = str(st.date_input("End Date", key=f"pt_crawl_end_date{key_suffix}"))
+
         st.markdown("**Volume & Output**")
         c1, c2 = st.columns(2)
         with c1:
@@ -1241,6 +1248,8 @@ def generate_pdf(data, client_name):
         buffer, pagesize=pagesizes.A4,
         topMargin=0.5*inch, bottomMargin=0.6*inch,
         leftMargin=0.6*inch, rightMargin=0.6*inch,
+        title=f"{client_name} — Requirement Handling Form",
+        author="42Signals",
     )
     styles = getSampleStyleSheet()
     el = []
@@ -1280,15 +1289,33 @@ def generate_pdf(data, client_name):
     ))
     el.append(Spacer(1, 0.1*inch))
 
+    def _val_paragraph(v):
+        if not v:
+            return Paragraph("—", val_s)
+        s = str(v)
+        # detect URLs and render as clickable hyperlinks
+        import re as _re
+        url_pat = _re.compile(r'(https?://\S+)')
+        parts = url_pat.split(s)
+        if len(parts) == 1:
+            return Paragraph(_html_mod.escape(s), val_s)
+        xml = ""
+        for part in parts:
+            if url_pat.match(part):
+                esc_url = _html_mod.escape(part, quote=True)
+                xml += f'<a href="{esc_url}" color="#2563eb">{esc_url}</a>'
+            else:
+                xml += _html_mod.escape(part)
+        return Paragraph(xml, val_s)
+
     row_colors = [HexColor("#f9fafb"), HexColor("#ffffff")]
     ci = 0
     for section, content in data.items():
         el.append(Paragraph(f"  {_html_mod.escape(str(section))}", sec_s))
         el.append(Spacer(1, 0.04*inch))
         rows = [
-            # Escape both key and value — ReportLab Paragraph parses XML-like tags
             [Paragraph(_html_mod.escape(str(k)), key_s),
-             Paragraph(_html_mod.escape(str(v)) if v else "—", val_s)]
+             _val_paragraph(v)]
             for k, v in content.items()
         ]
         if rows:
