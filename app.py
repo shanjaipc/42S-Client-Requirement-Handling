@@ -52,6 +52,12 @@ st.set_page_config(
 
 LOGO_PATH = "42slogo.png"
 
+# Bidirectional component for secure localStorage-based session persistence.
+_session_mgr = components.declare_component(
+    "session_manager",
+    path=str(Path(__file__).parent / "session_component"),
+)
+
 # D3.js bundled locally so mind maps work on servers without internet access.
 # Falls back to CDN if the file is missing (dev convenience only).
 _D3_PATH = Path("d3.v7.min.js")
@@ -684,9 +690,10 @@ if "login_username_preview" not in st.session_state: st.session_state["login_use
 if "cc_show_results"        not in st.session_state: st.session_state["cc_show_results"]        = False
 if "analytics_sid"          not in st.session_state: st.session_state["analytics_sid"]          = str(uuid.uuid4())
 if "analytics_last_page"    not in st.session_state: st.session_state["analytics_last_page"]    = ""
+if "ls_write_token"         not in st.session_state: st.session_state["ls_write_token"]         = ""
+if "ls_clear"               not in st.session_state: st.session_state["ls_clear"]               = False
 
-# Session is maintained via st.session_state only (per browser tab).
-# No URL-based token restoration — tokens in URLs are shareable and insecure.
+# Session restoration from localStorage is handled by _session_mgr component below.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1488,7 +1495,8 @@ def render_login():
             _new_analytics_sid = str(uuid.uuid4())
             st.session_state["analytics_sid"] = _new_analytics_sid
             log_event(EVENT_LOGIN, clean_user, _new_analytics_sid)
-            _save_session(clean_user, display_name)
+            _sid = _save_session(clean_user, display_name)
+            st.session_state["ls_write_token"] = _sid
             st.rerun()
         else:
             new_attempts = _srv_attempts + 1
@@ -1623,6 +1631,7 @@ with st.sidebar:
         log_event(EVENT_LOGOUT, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""))
         _clear_session()
         st.query_params.clear()
+        st.session_state["ls_clear"]        = True
         st.session_state["authenticated"]   = False
         st.session_state["current_user"]    = None
         st.session_state["display_name"]    = None
@@ -3574,6 +3583,35 @@ def render_analytics():
             )
     else:
         st.info("No activity recorded yet.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOCALSTORAGE SESSION SYNC  (bidirectional component — no URL exposure)
+# ─────────────────────────────────────────────────────────────────────────────
+if st.session_state["ls_write_token"]:
+    _tok = st.session_state["ls_write_token"]
+    st.session_state["ls_write_token"] = ""
+    _session_mgr(action="write", token=_tok, key="ls_write")
+
+elif st.session_state["ls_clear"]:
+    st.session_state["ls_clear"] = False
+    _session_mgr(action="clear", token="", key="ls_clear")
+
+elif not st.session_state["authenticated"]:
+    # Read the stored token from localStorage.  Returns None on the first render
+    # (before the component JS has responded), then the token string on the next.
+    _stored_token = _session_mgr(action="read", token="", key="ls_read")
+    if _stored_token:
+        _sess_user, _sess_display = _load_session(_stored_token)
+        if _sess_user:
+            st.session_state["authenticated"] = True
+            st.session_state["current_user"]  = _sess_user
+            st.session_state["display_name"]  = _sess_display
+            st.rerun()
+        else:
+            # Token is invalid/expired — wipe it from localStorage
+            st.session_state["ls_clear"] = True
+            st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
