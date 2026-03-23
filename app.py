@@ -1,13 +1,5 @@
 import streamlit as st # type: ignore
 import streamlit.components.v1 as components # type: ignore
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
-from reportlab.lib import colors  # type: ignore
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
-from reportlab.lib import pagesizes  # type: ignore
-from reportlab.lib.units import inch  # type: ignore
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # type: ignore
-from reportlab.lib.colors import HexColor  # type: ignore
-from docx import Document # type: ignore
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 import os
@@ -60,12 +52,14 @@ _session_mgr = components.declare_component(
 
 # D3.js bundled locally so mind maps work on servers without internet access.
 # Falls back to CDN if the file is missing (dev convenience only).
-_D3_PATH = Path("d3.v7.min.js")
-_D3_INLINE = (
-    f"<script>{_D3_PATH.read_text()}</script>"
-    if _D3_PATH.exists()
-    else '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>'
-)
+@st.cache_resource
+def _load_d3_inline():
+    _path = Path("d3.v7.min.js")
+    if _path.exists():
+        return f"<script>{_path.read_text()}</script>"
+    return '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>'
+
+_D3_INLINE = _load_d3_inline()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SECURITY HELPERS
@@ -704,6 +698,7 @@ if "analytics_sid"          not in st.session_state: st.session_state["analytics
 if "analytics_last_page"    not in st.session_state: st.session_state["analytics_last_page"]    = ""
 if "ls_write_token"         not in st.session_state: st.session_state["ls_write_token"]         = ""
 if "ls_clear"               not in st.session_state: st.session_state["ls_clear"]               = False
+if "_editing_submission_file" not in st.session_state: st.session_state["_editing_submission_file"] = None
 
 # Session restoration from localStorage is handled by _session_mgr component below.
 
@@ -1243,6 +1238,12 @@ def render_summary(data):
 def generate_pdf(data, client_name):
     """Build a formatted PDF from form_data. All user values are XML-escaped
     before being passed to ReportLab Paragraph to prevent markup injection."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
+    from reportlab.lib import pagesizes  # type: ignore
+    from reportlab.lib.units import inch  # type: ignore
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # type: ignore
+    from reportlab.lib.colors import HexColor  # type: ignore
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=pagesizes.A4,
@@ -1751,11 +1752,16 @@ def _json_default(obj):
 
 
 def save_submission(form_data: dict, client_name: str, username: str) -> None:
-    """Persist the current form widget state and form_data to submissions/."""
+    """Persist the current form widget state and form_data to submissions/.
+    If a submission was loaded for editing, overwrite that file instead of creating a new one."""
     _SUBMISSIONS_DIR.mkdir(exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", client_name or "unknown")
-    filename = f"{safe_name}_{timestamp}.json"
+    editing_file = st.session_state.get("_editing_submission_file")
+    if editing_file and (_SUBMISSIONS_DIR / editing_file).exists():
+        filename = editing_file
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", client_name or "unknown")
+        filename = f"{safe_name}_{timestamp}.json"
     # Capture all widget keys that belong to the requirement form
     snapshot = {
         k: v for k, v in st.session_state.items()
@@ -1770,6 +1776,7 @@ def save_submission(form_data: dict, client_name: str, username: str) -> None:
     }
     with open(_SUBMISSIONS_DIR / filename, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, default=_json_default)
+    st.session_state["_editing_submission_file"] = filename
     list_submissions.clear()  # invalidate cache so the new file appears immediately
 
 
@@ -1814,6 +1821,7 @@ def load_submission(filename: str) -> None:
             except ValueError:
                 pass
         st.session_state[k] = v
+    st.session_state["_editing_submission_file"] = filename
     st.rerun()
 
 
@@ -1901,8 +1909,23 @@ def render_main_form():
                 key="_load_submission_select",
                 label_visibility="collapsed",
             )
-            if st.button("⬆️  Load & Edit", key="_load_submission_btn"):
-                load_submission(_options[_chosen_label])
+            btn_col1, _ = st.columns([1, 3])
+            with btn_col1:
+                if st.button("⬆️  Load & Edit", key="_load_submission_btn"):
+                    load_submission(_options[_chosen_label])
+
+    # If editing a loaded submission, show a banner + allow starting fresh
+    if st.session_state.get("_editing_submission_file"):
+        info_col, btn_col = st.columns([4, 1])
+        with info_col:
+            st.info(f"✏️  Editing: **{st.session_state['_editing_submission_file']}** — saving will update this record in place.")
+        with btn_col:
+            if st.button("✚  New Form", key="_new_form_btn", use_container_width=True):
+                st.session_state["_editing_submission_file"] = None
+                for k in list(st.session_state.keys()):
+                    if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES):
+                        del st.session_state[k]
+                st.rerun()
 
     left, right = st.columns([2, 1], gap="large")
     form_data = {}
@@ -2236,6 +2259,7 @@ def render_feasibility():
                 log_event(EVENT_GENERATE_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility", {"client": client_name})
                 try:
                     with st.spinner("Building document…"):
+                        from docx import Document  # type: ignore
                         doc = Document()
                         doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
 
@@ -3005,6 +3029,12 @@ function click(e,d){
 
 def _generate_cost_pdf(results, grand_total, selected_domains, platform_display, crawl_icons):
     """Build a formatted PDF cost estimate using ReportLab."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
+    from reportlab.lib import pagesizes  # type: ignore
+    from reportlab.lib.units import inch  # type: ignore
+    from reportlab.lib.enums import TA_CENTER  # type: ignore
+    from reportlab.lib.colors import HexColor  # type: ignore
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=pagesizes.A4,
