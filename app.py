@@ -524,18 +524,21 @@ details[open] {
     color: #374151 !important;
     letter-spacing: 0.01em !important;
 }
-.stRadio > div {
+.stRadio > div,
+.stRadio [role="radiogroup"] {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     flex-wrap: wrap !important;
     gap: 8px !important;
 }
-.stRadio > div > label {
+.stRadio > div > label,
+.stRadio [role="radiogroup"] label {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     padding: 6px 14px !important;
+    height: 32px !important;
     border-radius: 6px !important;
     border: 1.5px solid #c9cfd8 !important;
     background: #ffffff !important;
@@ -546,19 +549,27 @@ details[open] {
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
     margin: 0 !important;
     line-height: 1 !important;
+    box-sizing: border-box !important;
 }
-.stRadio > div > label:hover {
+.stRadio > div > label:hover,
+.stRadio [role="radiogroup"] label:hover {
     background: #f1f5f9 !important;
     border-color: #9ca3af !important;
 }
-.stRadio > div > label:has(input:checked) {
+.stRadio > div > label:has(input:checked),
+.stRadio [role="radiogroup"] label:has(input:checked) {
     background: #1f2937 !important;
     border-color: #1f2937 !important;
     color: #ffffff !important;
 }
-/* Hide the native round radio circle */
-.stRadio > div > label > div:first-child {
-    display: none !important;
+/* Ensure text and nested elements inherit white color on selected state */
+.stRadio > div > label:has(input:checked) p,
+.stRadio > div > label:has(input:checked) span,
+.stRadio > div > label:has(input:checked) div,
+.stRadio [role="radiogroup"] label:has(input:checked) p,
+.stRadio [role="radiogroup"] label:has(input:checked) span,
+.stRadio [role="radiogroup"] label:has(input:checked) div {
+    color: #ffffff !important;
 }
 .stRadio label p {
     margin: 0 !important;
@@ -566,7 +577,8 @@ details[open] {
     color: inherit !important;
 }
 /* Radio keyboard focus */
-.stRadio > div > label:has(input:focus-visible) {
+.stRadio > div > label:has(input:focus-visible),
+.stRadio [role="radiogroup"] label:has(input:focus-visible) {
     outline: 2px solid #374151 !important;
     outline-offset: 2px !important;
 }
@@ -799,10 +811,14 @@ def frequency_selector(label, key_prefix):
     with col1:
         freq = st.selectbox(f"{label} — Frequency", ["Daily", "Weekly", "Monthly", "Hourly"], key=f"{key_prefix}_freq")
     hourly_count = None
+    daily_count = None
     if freq == "Hourly":
         with col2:
             hourly_count = st.number_input("Times / day", min_value=1, key=f"{key_prefix}_hourly")
-    return freq, hourly_count
+    elif freq == "Daily":
+        with col2:
+            daily_count = st.radio("Times / day", [1, 2], key=f"{key_prefix}_daily", horizontal=True)
+    return freq, hourly_count, daily_count
 
 
 def calculate_risk(freq_string, volume_string):
@@ -869,27 +885,65 @@ def _safe_key(s):
 def _pt_crawl_config(key_suffix=""):
     cfg = {}
     crawl_type = st.radio(
-        "Crawl Type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)"],
+        "Crawl Type", ["Category-based (Category_ES)", "Input-based (URL/Input driven)", "Products Only"],
         horizontal=True, key=f"pt_crawl_type{key_suffix}"
     )
     cfg["Crawl Type"] = crawl_type
 
     st.markdown("**Overall Crawl Frequency**")
-    freq, hourly = frequency_selector("Overall", f"pt_overall{key_suffix}")
-    cfg["Overall Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+    freq, hourly, daily = frequency_selector("Overall", f"pt_overall{key_suffix}")
+    cfg["Overall Frequency"] = f"{freq} ({hourly} times/day)" if hourly else (f"{freq} ({daily}x/day)" if daily and daily > 1 else freq)
 
-    if crawl_type == "Category-based (Category_ES)":
+    if crawl_type == "Products Only":
+        st.markdown("---")
+        st.markdown("##### C) Products Only Configuration")
+
+        st.markdown("**Products Crawl Frequency**")
+        pf, ph, pd = frequency_selector("Products Crawl", f"pt_prodonly{key_suffix}")
+        cfg["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else (f"{pf} ({pd}x/day)" if pd and pd > 1 else pf)
+        if ph:
+            cfg["Hourly Crawl Timings"] = st.text_input(
+                "Specify crawl hours", placeholder="e.g., 9 AM, 12 PM, 3 PM, 6 PM",
+                key=f"pt_prodonly_hourly_timings{key_suffix}"
+            )
+
+        st.markdown("**Inputs**")
+        cfg["Sample Input URLs"] = st.text_area("Sample Product URLs", placeholder="If client inputs not available, provide testing URLs", key=f"pt_prodonly_sample_urls{key_suffix}")
+        inp_status = st.radio("Client Inputs Status", ["Not Yet Provided", "Available — See Sheet Link Below"], key=f"pt_prodonly_inputs_status{key_suffix}", horizontal=True)
+        if inp_status == "Not Yet Provided":
+            cfg["Client Inputs Expected Date"] = str(st.date_input("Expected delivery date for inputs", key=f"pt_prodonly_inputs_expected_date{key_suffix}"))
+        else:
+            cfg["Client Inputs Sheet Link"] = st.text_input("Sheet Link with client inputs", key=f"pt_prodonly_inputs_sheet_link{key_suffix}")
+
+        st.markdown("**Location Dependency**")
+        is_pincode = st.radio("Pincode / Zipcode based?", ["Yes", "No"], key=f"pt_prodonly_pincode_based{key_suffix}", horizontal=True)
+        cfg["Pincode Based"] = is_pincode
+        if is_pincode == "Yes":
+            c1, c2 = st.columns(2)
+            with c1:
+                cfg["Sample Pincode"] = st.text_input("Sample Pincode", placeholder="e.g., 110001, 560001", key=f"pt_prodonly_sample_pincode{key_suffix}")
+            with c2:
+                cfg["Client Pincode List Link"] = st.text_input("Pincode list link (if available)", key=f"pt_prodonly_pincode_list_link{key_suffix}")
+
+        st.markdown("**Volume & Output**")
+        c1, c2 = st.columns(2)
+        with c1:
+            cfg["Expected Volume"] = st.text_input("Expected Volume / day", placeholder="e.g., 50,000 products", key=f"pt_prodonly_expected_volume{key_suffix}")
+        with c2:
+            cfg["Screenshot Required"] = st.radio("Screenshot Required?", ["Yes", "No"], key=f"pt_prodonly_screenshot{key_suffix}", horizontal=True)
+
+    elif crawl_type == "Category-based (Category_ES)":
         st.markdown("---")
         st.markdown("##### A) Category_ES Configuration")
 
         st.markdown("**Index Frequency**")
         c1, c2 = st.columns(2)
         with c1:
-            pf, ph = frequency_selector("Products Index", f"pt_prod{key_suffix}")
-            cfg["Products Index Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+            pf, ph, pd = frequency_selector("Products Index", f"pt_prod{key_suffix}")
+            cfg["Products Index Frequency"] = f"{pf} ({ph} times/day)" if ph else (f"{pf} ({pd}x/day)" if pd and pd > 1 else pf)
         with c2:
-            tf, th = frequency_selector("Trends Index", f"pt_trend{key_suffix}")
-            cfg["Trends Index Frequency"] = f"{tf} ({th} times/day)" if th else tf
+            tf, th, td = frequency_selector("Trends Index", f"pt_trend{key_suffix}")
+            cfg["Trends Index Frequency"] = f"{tf} ({th} times/day)" if th else (f"{tf} ({td}x/day)" if td and td > 1 else tf)
 
         if ph or th:
             cfg["Hourly Crawl Timings"] = st.text_input(
@@ -915,7 +969,7 @@ def _pt_crawl_config(key_suffix=""):
         else:
             cfg["Client Category Expected Date"] = str(st.date_input("Expected date for category list", key=f"pt_category_expected_date{key_suffix}"))
 
-    else:
+    elif crawl_type == "Input-based (URL/Input driven)":
         st.markdown("---")
         st.markdown("##### B) Input-Based Configuration")
 
@@ -923,12 +977,12 @@ def _pt_crawl_config(key_suffix=""):
         need_product = st.radio("Products crawl required?", ["Yes", "No"], key=f"pt_input_products_needed{key_suffix}", horizontal=True)
         cfg["Products Crawl Needed"] = need_product
         if need_product == "Yes":
-            pf, ph = frequency_selector("Products Crawl", f"pt_input_prod{key_suffix}")
-            cfg["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else pf
+            pf, ph, pd = frequency_selector("Products Crawl", f"pt_input_prod{key_suffix}")
+            cfg["Products Crawl Frequency"] = f"{pf} ({ph} times/day)" if ph else (f"{pf} ({pd}x/day)" if pd and pd > 1 else pf)
 
         st.markdown("**Trends Crawl**")
-        tf, th = frequency_selector("Trends Crawl", f"pt_input_trend{key_suffix}")
-        cfg["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else tf
+        tf, th, td = frequency_selector("Trends Crawl", f"pt_input_trend{key_suffix}")
+        cfg["Trends Crawl Frequency"] = f"{tf} ({th} times/day)" if th else (f"{tf} ({td}x/day)" if td and td > 1 else tf)
         if th:
             cfg["Trends Hourly Timings"] = st.text_input(
                 "Specify timing if hourly", placeholder="e.g., 10 AM, 2 PM, 6 PM, 10 PM",
@@ -982,8 +1036,8 @@ def _sos_crawl_config(key_suffix=""):
         cfg["No. of Products per Keyword"] = st.number_input("Products per keyword", min_value=1, value=10, key=f"sos_products{key_suffix}")
 
     st.markdown("**Crawl Frequency**")
-    freq, hourly = frequency_selector("SOS Crawl", f"sos{key_suffix}")
-    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+    freq, hourly, daily = frequency_selector("SOS Crawl", f"sos{key_suffix}")
+    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else (f"{freq} ({daily}x/day)" if daily and daily > 1 else freq)
     return cfg
 
 
@@ -1001,8 +1055,8 @@ def _rev_crawl_config(key_suffix=""):
     st.markdown("**Frequency**")
     c1, c2 = st.columns(2)
     with c1:
-        freq, hourly = frequency_selector("Reviews Crawl", f"rev{key_suffix}")
-        cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+        freq, hourly, daily = frequency_selector("Reviews Crawl", f"rev{key_suffix}")
+        cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else (f"{freq} ({daily}x/day)" if daily and daily > 1 else freq)
     if hourly:
         with c2:
             cfg["Hourly Timings"] = st.text_input("Timing if hourly", placeholder="e.g., 8 AM, 12 PM, 6 PM, 10 PM", key=f"rev_hourly_timings{key_suffix}")
@@ -1012,8 +1066,8 @@ def _rev_crawl_config(key_suffix=""):
 def _pv_crawl_config(key_suffix=""):
     cfg = {}
     st.markdown("**Frequency**")
-    freq, hourly = frequency_selector("Price Violation Crawl", f"pv{key_suffix}")
-    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else freq
+    freq, hourly, daily = frequency_selector("Price Violation Crawl", f"pv{key_suffix}")
+    cfg["Frequency"] = f"{freq} ({hourly} times/day)" if hourly else (f"{freq} ({daily}x/day)" if daily and daily > 1 else freq)
 
     st.markdown("**Inputs**")
     cfg["Product URL List"] = st.text_area("Product URL list to monitor *", placeholder="Sample product URLs", key=f"pv_product_url_list{key_suffix}")
