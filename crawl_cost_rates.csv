@@ -1,15 +1,15 @@
-domain,display_name,zipcode,sku_rate,cat_rate,kw_rate
-swiggy.com,Swiggy,False,0.0,0.0,0.0
-swiggy.com,Swiggy,True,0.0,0.0,0.0
-blinkit.com,Blinkit,False,0.000014,0.000000214,0.0000000235
-blinkit.com,Blinkit,True,0.000014,0.0000154,0.0000007
-zeptonow.com,Zeptonow,False,0.0,0.0,0.0
-zeptonow.com,Zeptonow,True,0.0,0.0,0.0
-amazon.in,Amazon,False,0.000821,0.000822,0.00000333
-amazon.in,Amazon,True,0.000821,0.000822,0.00000333
-flipkart.com,Flipkart,False,0.000056,0.0000571,0.0000028
-flipkart.com,Flipkart,True,0.000056,0.0000571,0.0000028
-myntra.com,Myntra,False,0.0,0.0,0.0
-myntra.com,Myntra,True,0.0000757,0.00000154,0.0
-ajio.com,Ajio,False,0.000072,0.0000731,0.0000028
-ajio.com,Ajio,True,0.000072,0.0000731,0.0000028
+domain,display_name,zipcode,sku_rate,cat_rate,kw_rate,last_updated
+swiggy.com,Swiggy,False,0.0,0.0,0.0,24 Mar 2026
+swiggy.com,Swiggy,True,0.0,0.0,0.0,24 Mar 2026
+blinkit.com,Blinkit,False,0.000014,0.000000214,0.0000000235,24 Mar 2026
+blinkit.com,Blinkit,True,0.000014,0.0000154,0.0000007,24 Mar 2026
+zeptonow.com,Zeptonow,False,0.0,0.0,0.0,24 Mar 2026
+zeptonow.com,Zeptonow,True,0.0,0.0,0.0,24 Mar 2026
+amazon.in,Amazon,False,0.000821,0.000822,0.00000333,24 Mar 2026
+amazon.in,Amazon,True,0.000821,0.000822,0.00000333,24 Mar 2026
+flipkart.com,Flipkart,False,0.000056,0.0000571,0.0000028,24 Mar 2026
+flipkart.com,Flipkart,True,0.000056,0.0000571,0.0000028,24 Mar 2026
+myntra.com,Myntra,False,0.0,0.0,0.0,24 Mar 2026
+myntra.com,Myntra,True,0.0000757,0.00000154,0.0,24 Mar 2026
+ajio.com,Ajio,False,0.000072,0.0000731,0.0000028,24 Mar 2026
+ajio.com,Ajio,True,0.000072,0.0000731,0.0000028,24 Mar 2026
