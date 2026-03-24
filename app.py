@@ -1664,12 +1664,16 @@ with st.sidebar:
         ),
     }
 
-    # Analytics Dashboard — admin-only nav entry
+    # Admin-only nav entries
     _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
     if _current_role == "admin":
         _NAV["analytics"] = (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
             "Analytics Dashboard",
+        )
+        _NAV["rate_mgr"] = (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+            "Rate Manager",
         )
 
     for key, (svg, label) in _NAV.items():
@@ -1889,6 +1893,8 @@ def _validate_form(form_data, modules):
     return errors
 
 
+
+
 def render_main_form():
     page_title(
         "New Requirement Form",
@@ -1917,8 +1923,6 @@ def render_main_form():
     # If editing a loaded submission, show a banner + allow starting fresh
     if st.session_state.get("_editing_submission_file"):
         info_col, btn_col = st.columns([4, 1])
-        with info_col:
-            st.info(f"✏️  Editing: **{st.session_state['_editing_submission_file']}** — saving will update this record in place.")
         with btn_col:
             if st.button("✚  New Form", key="_new_form_btn", use_container_width=True):
                 st.session_state["_editing_submission_file"] = None
@@ -1945,7 +1949,13 @@ def render_main_form():
 
         c3, c4 = st.columns(2)
         with c3:
-            completion_date = st.date_input("Expected Completion Date", key="form_completion_date")
+            default_date = date.today() + timedelta(days=4)
+
+            completion_date = st.date_input(
+                "Expected Completion Date",
+                value=default_date,
+                key="form_completion_date"
+            )
         with c4:
             expected_market = st.text_input("Target Market / Geography *", placeholder="e.g., India, Southeast Asia", key="form_target_market")
 
@@ -2053,13 +2063,17 @@ def render_main_form():
             )
             if festive["Crawl Type"] == "Products + Trends Based":
                 festive["Domains"], _festive_domains = domain_selector("Domains *", "festive")
+                festive["URL List"] = st.text_area("URL List", placeholder="Provide product/trend URLs for festive crawl", key="festive_pt_urls")
                 st.markdown("**Schedule**")
                 _apply_domain_config(festive, "festive", _festive_domains, _festive_schedule_config)
             elif festive["Crawl Type"] == "Category URL Based":
-                festive["Category URL List"] = st.text_area("Category URLs", placeholder="Provide category URLs for festive crawl", key="festive_category_urls")
+                festive["Domains"], _festive_domains = domain_selector("Domains *", "festive")
+                festive["URL List"] = st.text_area("URL List", placeholder="Provide additional URLs for festive crawl", key="festive_cat_urls")
                 st.markdown("**Schedule**")
                 festive.update(_festive_schedule_config())
             else:
+                festive["Domains"], _festive_domains = domain_selector("Domains *", "festive")
+                festive["URL List"] = st.text_area("URL List", placeholder="Provide URLs for festive SOS crawl", key="festive_sos_urls")
                 st.markdown("**Schedule**")
                 festive.update(_festive_schedule_config())
             form_data["Festive Sale Crawls"] = festive
@@ -2091,7 +2105,7 @@ def render_main_form():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # PDF Generation
+        # PDF Generation + Download (single button)
         if st.button("⬇️  Generate & Download PDF", type="primary", use_container_width=True):
             if not client_name:
                 st.error("Enter a Client Name before generating the PDF.")
@@ -2105,37 +2119,33 @@ def render_main_form():
             log_event(EVENT_GENERATE_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main", {"client": client_name})
             try:
                 with st.spinner("Building PDF…"):
-                    pdf_bytes = generate_pdf(form_data, client_name).read()
-                st.session_state["pdf_bytes"] = pdf_bytes
+                    _pdf_bytes = generate_pdf(form_data, client_name).read()
             except Exception as e:
                 st.error(f"PDF generation failed — please try again or contact your admin. ({type(e).__name__})")
                 st.stop()
-            # Save form state so it can be reloaded and edited later
             try:
                 save_submission(form_data, client_name, st.session_state.get("current_user", ""))
             except Exception:
-                pass  # never block PDF generation due to a save error
-            # _safe_filename strips path-traversal chars from user-supplied client name
-            st.session_state["pdf_name"] = _safe_filename(client_name, "_Requirement_Form.pdf")
-            celebrate(
-                message="PDF generated successfully!",
-                sub=f"{_h(client_name)} Requirement Form is ready to download."
-            )
-            st.toast("PDF ready! Click below to download.", icon="🎉")
-            components.html(
-                "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
-                height=0,
-            )
-
-        if st.session_state.get("pdf_bytes"):
-            if st.download_button(
-                label="📄  Download Requirement PDF",
-                data=st.session_state["pdf_bytes"],
-                file_name=st.session_state.get("pdf_name", "requirement.pdf"),
-                mime="application/pdf",
-                use_container_width=True,
-            ):
-                log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
+                pass
+            log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
+            celebrate(message="Downloading PDF…", sub=f"{_h(client_name)} Requirement Form is downloading.")
+            _pdf_b64  = base64.b64encode(_pdf_bytes).decode()
+            _pdf_name = _safe_filename(client_name, "_Requirement_Form.pdf")
+            components.html(f"""<script>
+            (function(){{
+                var b = atob("{_pdf_b64}");
+                var a = new Uint8Array(b.length);
+                for(var i=0;i<b.length;i++) a[i]=b.charCodeAt(i);
+                var blob = new Blob([a],{{type:"application/pdf"}});
+                var url  = URL.createObjectURL(blob);
+                var el   = window.parent.document.createElement("a");
+                el.href  = url; el.download = "{_pdf_name}";
+                window.parent.document.body.appendChild(el);
+                el.click();
+                window.parent.document.body.removeChild(el);
+                URL.revokeObjectURL(url);
+            }})();
+            </script>""", height=0)
 
     with right:
         render_summary(form_data)
@@ -2250,67 +2260,70 @@ def render_feasibility():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Generate document
-        if st.button("📄  Generate Feasibility Document", type="primary", use_container_width=True):
+        # Generate + Download feasibility document (single button)
+        if st.button("📄  Generate & Download Feasibility Document", type="primary", use_container_width=True):
             if not client_name:
                 st.error("Enter a Client Name before generating the document.")
                 st.stop()
-            else:
-                log_event(EVENT_GENERATE_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility", {"client": client_name})
-                try:
-                    with st.spinner("Building document…"):
-                        from docx import Document  # type: ignore
-                        doc = Document()
-                        doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
+            log_event(EVENT_GENERATE_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility", {"client": client_name})
+            try:
+                with st.spinner("Building document…"):
+                    from docx import Document  # type: ignore
+                    doc = Document()
+                    doc.add_heading(f"{client_name} — Feasibility Requirement", level=1)
 
-                        doc.add_heading("Requirement Information", level=2)
-                        doc.add_paragraph(f"Client Name: {client_name}")
-                        doc.add_paragraph(f"Requestor Name: {requestor_name}")
+                    doc.add_heading("Requirement Information", level=2)
+                    doc.add_paragraph(f"Client Name: {client_name}")
+                    doc.add_paragraph(f"Requestor Name: {requestor_name}")
 
-                        doc.add_heading("Domains", level=2)
-                        for d in domains:
-                            doc.add_paragraph(d, style="List Bullet")
+                    doc.add_heading("Domains", level=2)
+                    for d in domains:
+                        doc.add_paragraph(d, style="List Bullet")
 
-                        doc.add_heading("Crawl Configuration", level=2)
-                        doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
-                        doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
-                        if others_desc:
-                            doc.add_paragraph(f"Others: {others_desc}")
+                    doc.add_heading("Crawl Configuration", level=2)
+                    doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
+                    doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
+                    if others_desc:
+                        doc.add_paragraph(f"Others: {others_desc}")
 
-                        doc.add_heading("Zipcode Requirement", level=2)
-                        doc.add_paragraph(f"Zipcode Handling: {zipcode_type}")
-                        if zipcode_type in ["With Zipcode", "Both"]:
-                            doc.add_heading("Target Location", level=2)
-                            doc.add_paragraph(f"City: {target_city}")
-                            doc.add_paragraph(f"State: {target_state}")
-                            doc.add_paragraph(f"Country: {target_country}")
+                    doc.add_heading("Zipcode Requirement", level=2)
+                    doc.add_paragraph(f"Zipcode Handling: {zipcode_type}")
+                    if zipcode_type in ["With Zipcode", "Both"]:
+                        doc.add_heading("Target Location", level=2)
+                        doc.add_paragraph(f"City: {target_city}")
+                        doc.add_paragraph(f"State: {target_state}")
+                        doc.add_paragraph(f"Country: {target_country}")
 
-                        doc.add_heading("Additional Notes", level=2)
-                        doc.add_paragraph(additional_notes or "None")
+                    doc.add_heading("Additional Notes", level=2)
+                    doc.add_paragraph(additional_notes or "None")
 
-                        buf = BytesIO()
-                        doc.save(buf)
-                        buf.seek(0)
+                    buf = BytesIO()
+                    doc.save(buf)
+                    buf.seek(0)
+                    _feas_bytes = buf.getvalue()
 
-                    st.session_state["feas_doc"]  = buf.getvalue()
-                    st.session_state["feas_name"] = _safe_filename(client_name, "_Feasibility_Requirement.docx")
-                    celebrate(
-                        message="Feasibility Document generated!",
-                        sub=f"{_h(client_name)} feasibility doc is ready to download."
-                    )
-                    st.toast("Document ready! Click below to download.", icon="🎉")
-                except Exception as e:
-                    st.error(f"Document generation failed — please try again or contact your admin. ({type(e).__name__})")
-
-        if st.session_state.get("feas_doc"):
-            if st.download_button(
-                label="⬇️  Download Feasibility Document",
-                data=st.session_state["feas_doc"],
-                file_name=st.session_state.get("feas_name", "feasibility.docx"),
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-            ):
                 log_event(EVENT_DOWNLOAD_FEAS, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "feasibility")
+                celebrate(message="Downloading document…", sub=f"{_h(client_name)} feasibility doc is downloading.")
+                _feas_b64  = base64.b64encode(_feas_bytes).decode()
+                _feas_name = _safe_filename(client_name, "_Feasibility_Requirement.docx")
+                _feas_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                components.html(f"""<script>
+                (function(){{
+                    var b = atob("{_feas_b64}");
+                    var a = new Uint8Array(b.length);
+                    for(var i=0;i<b.length;i++) a[i]=b.charCodeAt(i);
+                    var blob = new Blob([a],{{type:"{_feas_mime}"}});
+                    var url  = URL.createObjectURL(blob);
+                    var el   = window.parent.document.createElement("a");
+                    el.href  = url; el.download = "{_feas_name}";
+                    window.parent.document.body.appendChild(el);
+                    el.click();
+                    window.parent.document.body.removeChild(el);
+                    URL.revokeObjectURL(url);
+                }})();
+                </script>""", height=0)
+            except Exception as e:
+                st.error(f"Document generation failed — please try again or contact your admin. ({type(e).__name__})")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3027,64 +3040,101 @@ function click(e,d){
 # COST CALCULATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _generate_cost_pdf(results, grand_total, selected_domains, platform_display, crawl_icons):
-    """Build a formatted PDF cost estimate using ReportLab."""
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image  # type: ignore
+def _generate_cost_pdf(results, grand_total, selected_domains, platform_display, rates_last_updated=""):
+    """Build a professional PDF cost estimate using ReportLab."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable  # type: ignore
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
     from reportlab.lib import pagesizes  # type: ignore
     from reportlab.lib.units import inch  # type: ignore
-    from reportlab.lib.enums import TA_CENTER  # type: ignore
-    from reportlab.lib.colors import HexColor  # type: ignore
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT  # type: ignore
+    from reportlab.lib.colors import HexColor, white  # type: ignore
+
+    # ── Page setup ────────────────────────────────────────────────────────────
+    # A4 usable width = 8.27" − 2×0.55" = 7.17"
+    L_MARGIN = R_MARGIN = 0.55 * inch
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=pagesizes.A4,
-        topMargin=0.5*inch, bottomMargin=0.6*inch,
-        leftMargin=0.6*inch, rightMargin=0.6*inch,
+        topMargin=0.45 * inch, bottomMargin=0.55 * inch,
+        leftMargin=L_MARGIN, rightMargin=R_MARGIN,
     )
-    styles = getSampleStyleSheet()
+    PAGE_W = pagesizes.A4[0] - L_MARGIN - R_MARGIN   # 7.17 in
+
+    # ── Colour palette ────────────────────────────────────────────────────────
+    C_DARK    = HexColor("#1e293b")
+    C_MID     = HexColor("#475569")
+    C_BORDER  = HexColor("#e2e8f0")
+    C_ACCENT  = HexColor("#0f172a")
+    C_RED     = HexColor("#dc2626")
+    C_SUBHDR  = HexColor("#334155")
+    C_ROWALT  = HexColor("#f1f5f9")
+    C_SUBTOT  = HexColor("#e2e8f0")
+    C_META    = HexColor("#94a3b8")
+
+    # ── Styles ────────────────────────────────────────────────────────────────
+    S = getSampleStyleSheet()
+
+    def _ps(name, **kw):
+        return ParagraphStyle(name, parent=S["Normal"], **kw)
+
+    title_s  = _ps("pdf_title",  fontSize=20, fontName="Helvetica-Bold",
+                   textColor=C_DARK, alignment=TA_LEFT, spaceAfter=2, leading=24)
+    meta_s   = _ps("pdf_meta",   fontSize=8,  textColor=C_META,  alignment=TA_LEFT, leading=12)
+    sec_s    = _ps("pdf_sec",    fontSize=9.5, fontName="Helvetica-Bold",
+                   textColor=white, leading=13)
+    th_s     = _ps("pdf_th",     fontSize=7.5, fontName="Helvetica-Bold",
+                   textColor=white, leading=10)
+    td_s     = _ps("pdf_td",     fontSize=8,  textColor=C_DARK,  leading=11)
+    tdc_s    = _ps("pdf_tdc",    fontSize=8,  textColor=C_MID,   alignment=TA_CENTER, leading=11)
+    cost_s   = _ps("pdf_cost",   fontSize=8,  fontName="Helvetica-Bold",
+                   textColor=C_RED, alignment=TA_RIGHT, leading=11)
+    sub_s    = _ps("pdf_sub",    fontSize=8,  fontName="Helvetica-Bold",
+                   textColor=C_SUBHDR, leading=11)
+    subcost_s= _ps("pdf_subcost",fontSize=8,  fontName="Helvetica-Bold",
+                   textColor=C_RED, alignment=TA_RIGHT, leading=11)
+    note_s   = _ps("pdf_note",   fontSize=7,  textColor=C_META,
+                   alignment=TA_RIGHT, leading=10, spaceAfter=4)
+    foot_s   = _ps("pdf_foot",   fontSize=7,  textColor=C_META,
+                   alignment=TA_CENTER, leading=10)
+    gt_s     = _ps("pdf_gt",     fontSize=10, fontName="Helvetica-Bold",
+                   textColor=white, alignment=TA_RIGHT, leading=14)
+
+    # ── Column widths (total = PAGE_W) ────────────────────────────────────────
+    # Crawl Type | Vol/Crawl | Freq | Days | Zipcode | Cost/Crawl | Total Cost
+    CW = [2.3*inch, 1.0*inch, 0.7*inch, 0.57*inch, 0.7*inch, 0.95*inch, 0.95*inch]
+
     el = []
 
-    title_s = ParagraphStyle("CCT", parent=styles["Heading1"], fontSize=18,
-                              textColor=HexColor("#1f2937"), alignment=TA_CENTER,
-                              fontName="Helvetica-Bold", spaceAfter=3)
-    sub_s   = ParagraphStyle("CCS", parent=styles["Normal"], fontSize=9,
-                              textColor=HexColor("#6b7280"), alignment=TA_CENTER, spaceAfter=12)
-    sec_s   = ParagraphStyle("CCH", parent=styles["Normal"], fontSize=10,
-                              textColor=HexColor("#ffffff"), backColor=HexColor("#1f2937"),
-                              fontName="Helvetica-Bold", leftIndent=8, spaceBefore=10, spaceAfter=4)
-    th_s    = ParagraphStyle("CCTH", parent=styles["Normal"], fontSize=7.5,
-                              textColor=HexColor("#ffffff"), fontName="Helvetica-Bold")
-    td_s    = ParagraphStyle("CCTD", parent=styles["Normal"], fontSize=8, textColor=HexColor("#111827"))
-    tdr_s   = ParagraphStyle("CCTDR", parent=styles["Normal"], fontSize=8,
-                              textColor=HexColor("#111827"), alignment=1)
-    cost_s  = ParagraphStyle("CCCS", parent=styles["Normal"], fontSize=8,
-                              textColor=HexColor("#dc2626"), fontName="Helvetica-Bold", alignment=2)
-    note_s  = ParagraphStyle("CCN", parent=styles["Normal"], fontSize=7.5,
-                              textColor=HexColor("#9ca3af"), alignment=TA_CENTER, spaceAfter=6)
-
+    # ── Header band ───────────────────────────────────────────────────────────
     try:
-        if os.path.exists(LOGO_PATH):
-            logo = Image(LOGO_PATH, width=0.9*inch, height=0.72*inch)
-            hdr_tbl = Table([[logo, Paragraph("<b>Crawl Cost Estimate</b>", title_s)]],
-                            colWidths=[1.1*inch, 5.9*inch])
-            hdr_tbl.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ]))
-            el.append(hdr_tbl)
-        else:
-            el.append(Paragraph("<b>Crawl Cost Estimate</b>", title_s))
+        logo_cell = Image(LOGO_PATH, width=0.85*inch, height=0.68*inch) if os.path.exists(LOGO_PATH) else Paragraph("42S", title_s)
     except Exception:
-        el.append(Paragraph("<b>Crawl Cost Estimate</b>", title_s))
+        logo_cell = Paragraph("42S", title_s)
 
-    el.append(Paragraph(
-        f"Generated: {date.today().strftime('%d %b %Y')} &nbsp;|&nbsp; "
-        f"Grand Total: <b>${grand_total:,.4f}</b>",
-        sub_s
-    ))
-    el.append(Spacer(1, 0.1*inch))
+    meta_lines = (
+        f"Generated: {date.today().strftime('%d %b %Y')}"
+        + (f"   |   Rates last updated: {rates_last_updated}" if rates_last_updated else "")
+        + f"   |   Platforms: {len(selected_domains)}"
+        + f"   |   Grand Total: <b>${grand_total:,.4f}</b>"
+    )
 
-    col_widths = [1.8*inch, 0.85*inch, 0.6*inch, 0.5*inch, 0.65*inch, 0.8*inch, 0.8*inch]
+    hdr = Table(
+        [[logo_cell,
+          [Paragraph("Crawl Cost Estimate", title_s),
+           Paragraph(meta_lines, meta_s)]]],
+        colWidths=[1.0*inch, PAGE_W - 1.0*inch],
+    )
+    hdr.setStyle(TableStyle([
+        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",(0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
+        ("TOPPADDING",  (0, 0), (-1, -1), 0),
+    ]))
+    el.append(hdr)
+    el.append(HRFlowable(width="100%", thickness=1.5, color=C_DARK, spaceAfter=10))
+
+    # ── Per-domain tables ─────────────────────────────────────────────────────
     for domain in selected_domains:
         domain_results = [r for r in results if r["domain"] == domain]
         if not domain_results:
@@ -3092,66 +3142,99 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
         display_name = platform_display.get(domain, domain)
         domain_total = sum(r["total_cost"] for r in domain_results)
 
-        el.append(Paragraph(
-            f"  {_html_mod.escape(display_name)} ({_html_mod.escape(domain)})", sec_s
-        ))
-        el.append(Spacer(1, 0.04*inch))
+        # Section header row (full-width spanning cell)
+        sec_hdr = Table(
+            [[Paragraph(f"{display_name}  <font size='8' color='#94a3b8'>({domain})</font>", sec_s),
+              Paragraph(f"Platform Total:  ${domain_total:,.4f}", gt_s)]],
+            colWidths=[PAGE_W * 0.55, PAGE_W * 0.45],
+        )
+        sec_hdr.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), C_ACCENT),
+            ("TOPPADDING",    (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING",   (0, 0), (0,  0),  10),
+            ("RIGHTPADDING",  (-1, 0),(-1, 0),  10),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        el.append(sec_hdr)
 
+        # Data table
         header_row = [
-            Paragraph("Crawl Type", th_s), Paragraph("Volume/Crawl", th_s),
-            Paragraph("Freq", th_s),       Paragraph("Days", th_s),
-            Paragraph("Zipcode", th_s),    Paragraph("Cost/Crawl", th_s),
-            Paragraph("Total Cost", th_s),
+            Paragraph("Crawl Type",   th_s), Paragraph("Vol / Crawl", th_s),
+            Paragraph("Frequency",    th_s), Paragraph("Days",        th_s),
+            Paragraph("Zipcode",      th_s), Paragraph("Cost / Crawl",th_s),
+            Paragraph("Total Cost",   th_s),
         ]
         table_rows = [header_row]
         for r in domain_results:
-            ct_icon = crawl_icons.get(r["crawl_type"], "")
             table_rows.append([
-                Paragraph(_html_mod.escape(f"{ct_icon} {r['crawl_type']}"), td_s),
-                Paragraph(f"{r['volume_per_crawl']:,}", tdr_s),
-                Paragraph(f"{r['freq']}x/d", tdr_s),
-                Paragraph(str(r["days"]), tdr_s),
-                Paragraph(r["zip_mode"].replace(" Zipcode", ""), tdr_s),
+                Paragraph(_html_mod.escape(r["crawl_type"]), td_s),
+                Paragraph(f"{r['volume_per_crawl']:,}", tdc_s),
+                Paragraph(f"{r['freq']}×/day", tdc_s),
+                Paragraph(str(r["days"]), tdc_s),
+                Paragraph(r["zip_mode"].replace(" Zipcode", ""), tdc_s),
                 Paragraph(f"${r['cost_per_crawl']:,.4f}", cost_s),
                 Paragraph(f"${r['total_cost']:,.4f}", cost_s),
             ])
+        # Subtotal row
         table_rows.append([
-            Paragraph("<b>Subtotal</b>", td_s),
-            Paragraph("", td_s), Paragraph("", td_s), Paragraph("", td_s),
-            Paragraph("", td_s), Paragraph("", td_s),
-            Paragraph(f"<b>${domain_total:,.4f}</b>", cost_s),
+            Paragraph("Subtotal", sub_s),
+            Paragraph("", tdc_s), Paragraph("", tdc_s), Paragraph("", tdc_s),
+            Paragraph("", tdc_s), Paragraph("", tdc_s),
+            Paragraph(f"${domain_total:,.4f}", subcost_s),
         ])
 
-        t = Table(table_rows, colWidths=col_widths)
+        t = Table(table_rows, colWidths=CW, repeatRows=1)
         t.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, 0),  HexColor("#1f2937")),
-            ("GRID",          (0, 0), (-1, -1), 0.4, HexColor("#e5e7eb")),
-            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -2), [HexColor("#ffffff"), HexColor("#f9fafb")]),
-            ("BACKGROUND",    (0, -1), (-1, -1), HexColor("#f1f5f9")),
+            # Header
+            ("BACKGROUND",    (0, 0), (-1, 0),   C_SUBHDR),
+            ("LINEBELOW",     (0, 0), (-1, 0),   1, C_DARK),
+            # Alternating rows
+            ("ROWBACKGROUNDS",(0, 1), (-1, -2),  [white, C_ROWALT]),
+            # Subtotal row
+            ("BACKGROUND",    (0, -1), (-1, -1), C_SUBTOT),
+            ("LINEABOVE",     (0, -1), (-1, -1), 0.75, C_MID),
+            # Grid
+            ("GRID",          (0, 0), (-1, -1),  0.3, C_BORDER),
+            ("LINEBEFORE",    (0, 0), (0, -1),   0,   C_BORDER),  # no left outer border
+            # Padding
+            ("VALIGN",        (0, 0), (-1, -1),  "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1),  5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1),  5),
+            ("LEFTPADDING",   (0, 0), (-1, -1),  8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1),  8),
+            # Right-align cost columns
+            ("ALIGN",         (5, 1), (6, -1),   "RIGHT"),
         ]))
         el.append(t)
-        el.append(Spacer(1, 0.15*inch))
 
-    gt_data = [["", "", "", "", "", "",
-                Paragraph(f"<b>Grand Total: ${grand_total:,.4f}</b>", cost_s)]]
-    gt = Table(gt_data, colWidths=col_widths)
-    gt.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), HexColor("#1f2937")),
-        ("TOPPADDING",    (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+        if rates_last_updated:
+            el.append(Paragraph(f"Rates last updated: {rates_last_updated}", note_s))
+        el.append(Spacer(1, 0.18 * inch))
+
+    # ── Grand total footer ────────────────────────────────────────────────────
+    gt_row = Table(
+        [[Paragraph("Grand Total", gt_s), Paragraph(f"USD  ${grand_total:,.4f}", gt_s)]],
+        colWidths=[PAGE_W * 0.7, PAGE_W * 0.3],
+    )
+    gt_row.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), C_DARK),
+        ("TOPPADDING",    (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING",   (0, 0), (0,  0),  12),
+        ("RIGHTPADDING",  (-1,0), (-1, 0),  12),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
     ]))
-    el.append(gt)
-    el.append(Spacer(1, 0.12*inch))
+    el.append(gt_row)
+    el.append(Spacer(1, 0.15 * inch))
+    el.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER))
+    el.append(Spacer(1, 0.06 * inch))
     el.append(Paragraph(
-        "Rates are benchmarks derived from internal crawl cost data. Actual costs may vary.",
-        note_s
+        "Rates are benchmarks derived from internal crawl cost data. Actual costs may vary. "
+        "This estimate is for internal planning purposes only.",
+        foot_s,
     ))
+
     doc.build(el)
     buffer.seek(0)
     return buffer.read()
@@ -3171,6 +3254,7 @@ def render_cost_calculator():
         return
 
     PLATFORM_LIST, PLATFORM_DISPLAY, RATES = [], {}, {}
+    _rates_last_updated = ""
     try:
         with open(_RATES_CSV, newline="") as _fh:
             for _row in csv.DictReader(_fh):
@@ -3188,8 +3272,10 @@ def render_cost_calculator():
                     st.error(f"crawl_cost_rates.csv: negative rate for '{_d}' (zipcode={_row['zipcode']}). Rates must be ≥ 0.")
                     return
                 RATES[_d][_key] = {"sku": _sku, "cat": _cat, "kw": _kw}
+                if not _rates_last_updated:
+                    _rates_last_updated = _row.get("last_updated", "").strip()
     except KeyError as e:
-        st.error(f"crawl_cost_rates.csv is missing column: {e}. Expected columns: domain, display_name, zipcode, sku_rate, cat_rate, kw_rate")
+        st.error(f"crawl_cost_rates.csv is missing column: {e}. Expected columns: domain, display_name, zipcode, sku_rate, cat_rate, kw_rate, last_updated")
         return
     except ValueError as e:
         st.error(f"crawl_cost_rates.csv contains an invalid number: {e}")
@@ -3201,6 +3287,7 @@ def render_cost_calculator():
     if not PLATFORM_LIST:
         st.error("crawl_cost_rates.csv loaded successfully but contains no domains. Add at least one domain row.")
         return
+
 
     # Remove stale selections: domains that were saved in session state but are
     # no longer present in the CSV (e.g. domain was renamed or removed).
@@ -3411,12 +3498,13 @@ def render_cost_calculator():
     grand_total = sum(r["total_cost"] for r in results)
     if grand_total == 0:
         st.info("All configured crawl types have a $0 rate. Check that the platforms and crawl types are correct, or update the rates in crawl_cost_rates.csv.")
-    s1, s2, s3, s4 = st.columns(4)
+    s1, s2, s3, s4, s5 = st.columns(5)
     for col, lbl, val, accent in [
-        (s1, "Grand Total (USD)", f"${grand_total:,.4f}", "#ef4444"),
+        (s1, "Grand Total (USD)", f"${grand_total:,.4f}",             "#ef4444"),
         (s2, "Platforms",         str(len(set(r["domain"] for r in results))), "#1f2937"),
         (s3, "Crawl Configs",     str(len(results)),                           "#1f2937"),
-        (s4, "Generated On",      datetime.now().strftime("%d %b %Y"),         "#1f2937"),
+        (s4, "Calculated On",     datetime.now().strftime("%d %b %Y"),         "#1f2937"),
+        (s5, "Rates Last Updated", _rates_last_updated,                        "#0369a1"),
     ]:
         with col:
             st.markdown(f"""
@@ -3483,13 +3571,18 @@ def render_cost_calculator():
             <th style="{th}text-align:right;">Total Cost</th>
         </tr></thead>
         <tbody>{rows_html}</tbody>
-        </table></div>""", unsafe_allow_html=True)
+        </table>
+        <div style="padding:6px 16px 8px 16px;font-size:0.72rem;color:#94a3b8;
+        font-family:'Inter',sans-serif;border-top:1px solid #f1f5f9;">
+            Rates last updated: {_rates_last_updated}
+        </div>
+        </div>""", unsafe_allow_html=True)
 
     # ── Downloads ─────────────────────────────────────────────────────────────
     section_header("📥", "Download Estimate")
     dl1, dl2, _ = st.columns([1, 1, 2])
 
-    pdf_bytes = _generate_cost_pdf(results, grand_total, selected_domains, PLATFORM_DISPLAY, CRAWL_ICONS)
+    pdf_bytes = _generate_cost_pdf(results, grand_total, selected_domains, PLATFORM_DISPLAY, _rates_last_updated)
     with dl1:
         if st.download_button(
             "⬇️  Download PDF",
@@ -3517,6 +3610,115 @@ def render_cost_calculator():
             use_container_width=True,
         ):
             log_event(EVENT_DOWNLOAD_COST_CSV, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "cost_calc")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: RATE MANAGER  (admin only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_rate_manager():
+    page_title(
+        "Rate Manager",
+        "Add, edit, or remove crawl cost rates for any platform. Changes are saved directly to crawl_cost_rates.csv.",
+    )
+
+    _RATES_CSV = Path("crawl_cost_rates.csv")
+    _COLS      = ["domain", "display_name", "zipcode", "sku_rate", "cat_rate", "kw_rate", "last_updated"]
+
+    if not _RATES_CSV.exists():
+        st.warning("crawl_cost_rates.csv not found — a new one will be created when you save.")
+        df = pd.DataFrame(columns=_COLS)
+    else:
+        df = pd.read_csv(_RATES_CSV)
+        for c in _COLS:
+            if c not in df.columns:
+                df[c] = "" if c in ("domain", "display_name", "last_updated") else False if c == "zipcode" else 0.0
+
+    # ── Meta bar ─────────────────────────────────────────────────────────────
+    last_updated = str(df["last_updated"].iloc[0]).strip() if len(df) > 0 else date.today().strftime("%d %b %Y")
+    m1, m2, m3 = st.columns([2, 2, 2])
+    with m1:
+        st.markdown(f"""
+        <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #1f2937;
+        box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Domains</div>
+            <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{df['domain'].nunique()}</div>
+        </div>""", unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""
+        <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #0369a1;
+        box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rates Last Updated</div>
+            <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{last_updated}</div>
+        </div>""", unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"""
+        <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #16a34a;
+        box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
+            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rate Rows</div>
+            <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{len(df)}</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Date update strip ─────────────────────────────────────────────────────
+    section_header("📅", "Rates Last Updated Date")
+    new_date = st.text_input(
+        "Set the 'Rates Last Updated' date (stored in every row of the CSV)",
+        value=last_updated,
+        key="rate_mgr_date",
+        placeholder="e.g. 24 Mar 2026",
+    )
+
+    # ── Editable rate table ───────────────────────────────────────────────────
+    section_header("📋", "Rate Table")
+    st.markdown(
+        '<p style="font-size:0.8rem;color:#64748b;margin:0 0 8px 0;font-family:\'Inter\',sans-serif;">'
+        'Edit cells directly. Use the <b>+</b> row at the bottom to add a new entry. '
+        'Each domain needs <b>two rows</b> — one with Zipcode <b>unchecked</b> (without) and one <b>checked</b> (with).</p>',
+        unsafe_allow_html=True,
+    )
+
+    edit_df = df[["domain", "display_name", "zipcode", "sku_rate", "cat_rate", "kw_rate"]].copy()
+    edit_df["zipcode"] = edit_df["zipcode"].astype(str).str.lower().map(
+        {"true": True, "false": False, "1": True, "0": False}
+    ).fillna(False).astype(bool)
+    for col in ("sku_rate", "cat_rate", "kw_rate"):
+        edit_df[col] = pd.to_numeric(edit_df[col], errors="coerce").fillna(0.0)
+
+    edited = st.data_editor(
+        edit_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="rate_mgr_editor",
+        column_config={
+            "domain":       st.column_config.TextColumn("Domain",        help="e.g. amazon.in",    width="medium"),
+            "display_name": st.column_config.TextColumn("Display Name",  help="e.g. Amazon India", width="medium"),
+            "zipcode":      st.column_config.CheckboxColumn("With Zipcode", help="Check for the zipcode variant of this domain"),
+            "sku_rate":     st.column_config.NumberColumn("SKU Rate",    help="Cost per SKU crawl",      format="%.10f", min_value=0.0),
+            "cat_rate":     st.column_config.NumberColumn("Category Rate", help="Cost per category crawl", format="%.10f", min_value=0.0),
+            "kw_rate":      st.column_config.NumberColumn("Keyword Rate", help="Cost per keyword crawl",  format="%.10f", min_value=0.0),
+        },
+    )
+
+    # ── Save ─────────────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    save_col, _ = st.columns([1, 3])
+    with save_col:
+        if st.button("💾  Save Changes", type="primary", use_container_width=True):
+            if edited.empty:
+                st.error("Cannot save an empty rate table.")
+            else:
+                missing = edited[edited["domain"].astype(str).str.strip() == ""]
+                if not missing.empty:
+                    st.error(f"{len(missing)} row(s) have an empty Domain — fill them in before saving.")
+                else:
+                    save_df = edited.copy()
+                    save_df["last_updated"] = new_date.strip() or last_updated
+                    save_df["zipcode"] = save_df["zipcode"].astype(bool)
+                    save_df.to_csv(_RATES_CSV, index=False)
+                    st.success(f"Saved {len(save_df)} rows to crawl_cost_rates.csv")
+                    st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
