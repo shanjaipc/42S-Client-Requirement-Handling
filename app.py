@@ -3807,6 +3807,13 @@ else:
                 "url": "https://redmine.promptcloud.com/agile/board?set_filter=1&f%5B%5D=project_id&op%5Bproject_id%5D=%3D&v%5Bproject_id%5D%5B%5D=40733&f%5B%5D=assigned_to_id&op%5Bassigned_to_id%5D=%21&v%5Bassigned_to_id%5D%5B%5D=57565&v%5Bassigned_to_id%5D%5B%5D=97098&v%5Bassigned_to_id%5D%5B%5D=77277&v%5Bassigned_to_id%5D%5B%5D=5972&v%5Bassigned_to_id%5D%5B%5D=60148&v%5Bassigned_to_id%5D%5B%5D=96645&v%5Bassigned_to_id%5D%5B%5D=97240&v%5Bassigned_to_id%5D%5B%5D=96993&v%5Bassigned_to_id%5D%5B%5D=53918&v%5Bassigned_to_id%5D%5B%5D=97369&v%5Bassigned_to_id%5D%5B%5D=95248&v%5Bassigned_to_id%5D%5B%5D=85453&v%5Bassigned_to_id%5D%5B%5D=96640&v%5Bassigned_to_id%5D%5B%5D=84753&v%5Bassigned_to_id%5D%5B%5D=86398&f%5B%5D=status_id&op%5Bstatus_id%5D=%3D&f_status%5B%5D=1&f_status%5B%5D=8&f_status%5B%5D=7&f_status%5B%5D=21&f_status%5B%5D=20&f_status%5B%5D=2&f_status%5B%5D=25&f_status%5B%5D=74&f_status%5B%5D=4&c%5B%5D=day_in_state&c%5B%5D=parent&default_chart=burndown_chart&chart_unit=issues&group_by=assigned_to&color_base=priority",
                 "label": "Open Redmine",
             },
+            {
+                "icon": "✍️",
+                "name": "Redmine Ticket Creation",
+                "desc": "To create any new tickets",
+                "url": "https://redmine.promptcloud.com/issues/new",
+                "label": "Open Redmine",
+            },
         ]
 
         cols = st.columns(2, gap="large")
