@@ -12,7 +12,10 @@ import json
 import uuid
 from pathlib import Path
 import pandas as pd # type: ignore
-from credentials import verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS
+from credentials import (
+    verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS,
+    add_user, set_password, set_role, set_active, list_users, save_users,
+)
 from analytics import (
     log_event,
     get_summary,
@@ -686,7 +689,7 @@ hr {
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
 
-if "page"             not in st.session_state: st.session_state["page"]             = "main"
+if "page"             not in st.session_state: st.session_state["page"]             = "dashboard"
 if "authenticated"    not in st.session_state: st.session_state["authenticated"]    = False
 if "current_user"     not in st.session_state: st.session_state["current_user"]     = None
 if "display_name"     not in st.session_state: st.session_state["display_name"]     = None
@@ -694,11 +697,16 @@ if "failed_attempts"        not in st.session_state: st.session_state["failed_at
 if "lockout_until"          not in st.session_state: st.session_state["lockout_until"]          = 0.0
 if "login_username_preview" not in st.session_state: st.session_state["login_username_preview"] = ""
 if "cc_show_results"        not in st.session_state: st.session_state["cc_show_results"]        = False
+if "cc_saved_scenarios"     not in st.session_state: st.session_state["cc_saved_scenarios"]     = {}
+if "_cc_last_results"       not in st.session_state: st.session_state["_cc_last_results"]       = []
 if "analytics_sid"          not in st.session_state: st.session_state["analytics_sid"]          = str(uuid.uuid4())
 if "analytics_last_page"    not in st.session_state: st.session_state["analytics_last_page"]    = ""
 if "ls_write_token"         not in st.session_state: st.session_state["ls_write_token"]         = ""
 if "ls_clear"               not in st.session_state: st.session_state["ls_clear"]               = False
 if "_editing_submission_file" not in st.session_state: st.session_state["_editing_submission_file"] = None
+if "_draft_dismissed"           not in st.session_state: st.session_state["_draft_dismissed"]           = False
+if "hist_status_filter_init"  not in st.session_state: st.session_state["hist_status_filter_init"]  = "All"
+if "_form_touched"            not in st.session_state: st.session_state["_form_touched"]            = False
 
 # Session restoration from localStorage is handled by _session_mgr component below.
 
@@ -1172,6 +1180,44 @@ def validate_required(client_name):
 
 
 def render_summary(data):
+    # ── Progress indicator ────────────────────────────────────────────────────
+    _REQUIRED_CHECKS = [
+        ("Client Name",       lambda d: bool(d.get("Client Information", {}).get("Client Name", "").strip())),
+        ("Target Market",     lambda d: bool(d.get("Client Information", {}).get("Target Market", "").strip())),
+        ("Modules Selected",  lambda d: bool(d.get("Modules Selected", {}).get("Selected Modules"))),
+        ("Domain(s) added",   lambda d: any(
+            bool(sec.get("Domains")) for k, sec in d.items()
+            if isinstance(sec, dict) and k not in ("Client Information", "Modules Selected",
+                                                    "Final Alignment", "Comments & Notes")
+        )),
+        ("Client Objective",  lambda d: bool(d.get("Final Alignment", {}).get("Client Core Objective", "").strip())),
+    ]
+    _done  = sum(1 for _, fn in _REQUIRED_CHECKS if fn(data))
+    _total = len(_REQUIRED_CHECKS)
+    _pct   = int(_done / _total * 100)
+    _color = "#16a34a" if _pct == 100 else "#3b82f6" if _pct >= 60 else "#f59e0b"
+
+    _checks_html = "".join(
+        f'<div style="display:flex;align-items:center;gap:6px;font-size:0.73rem;'
+        f'color:{"#16a34a" if fn(data) else "#94a3b8"};margin-bottom:3px;">'
+        f'{"✓" if fn(data) else "○"} {lbl}</div>'
+        for lbl, fn in _REQUIRED_CHECKS
+    )
+    st.markdown(
+        f'<div style="background:white;border-radius:10px;padding:14px 16px;'
+        f'border:1px solid #e5e7eb;margin-bottom:14px;font-family:\'Inter\',sans-serif;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+        f'<span style="font-size:0.75rem;font-weight:700;color:#374151;">Form Progress</span>'
+        f'<span style="font-size:0.75rem;font-weight:700;color:{_color};">{_done}/{_total}</span>'
+        f'</div>'
+        f'<div style="background:#f1f5f9;border-radius:99px;height:6px;overflow:hidden;margin-bottom:10px;">'
+        f'<div style="background:{_color};width:{_pct}%;height:100%;border-radius:99px;'
+        f'transition:width 0.3s ease;"></div></div>'
+        f'{_checks_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
@@ -1629,34 +1675,66 @@ with st.sidebar:
 
     st.markdown('<hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 14px 0;">', unsafe_allow_html=True)
 
-    # Section label
-    st.markdown('<div style="color:#6b7280;font-size:0.67rem;text-transform:uppercase;letter-spacing:0.14em;padding:0 6px 10px 6px;font-weight:600;font-family:\'Inter\',sans-serif;">Navigation</div>', unsafe_allow_html=True)
+    def _nav_group(group_label, items):
+        st.markdown(
+            f'<div style="color:#9ca3af;font-size:0.62rem;text-transform:uppercase;'
+            f'letter-spacing:0.14em;padding:10px 6px 5px 6px;font-weight:700;'
+            f'font-family:\'Inter\',sans-serif;">{group_label}</div>',
+            unsafe_allow_html=True,
+        )
+        for key, (svg, label) in items.items():
+            active = st.session_state["page"] == key
+            if active:
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg,#f1f5f9 0%,#e8ecf0 100%);'
+                    f'border:1px solid #dde3ea;border-left:3px solid #1f2937;border-radius:8px;'
+                    f'padding:9px 12px;color:#111827;font-size:0.83rem;font-weight:600;'
+                    f'margin-bottom:3px;display:flex;align-items:center;gap:9px;'
+                    f'font-family:\'Inter\',sans-serif;white-space:nowrap;'
+                    f'box-shadow:0 1px 3px rgba(0,0,0,0.05);">{svg}&nbsp;{label}</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                if st.button(label, key=f"nav_{key}", use_container_width=True):
+                    st.session_state["page"] = key
+                    st.rerun()
 
-    # Nav items — SVG icons, consistent active/inactive styling
-    _NAV = {
+    _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+
+    _NAV_TOOLS = {
+        "dashboard": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+            "Dashboard",
+        ),
         "main": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
             "New Requirement Form",
+        ),
+        "sub_history": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+            "Submission History",
         ),
         "feasibility": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
             "Feasibility Assessment",
         ),
+        "cost_calc": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h2m4 0h3M7 12h2m4 0h3M7 16h2m4 0h3"/></svg>',
+            "Cost Calculator",
+        ),
+    }
+    _NAV_REF = {
         "req_flow": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 12h9"/><path d="M14.5 9l3 3-3 3"/></svg>',
-            "New Requirement Flow",
+            "Requirement Flow",
         ),
         "ops_map": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-            "Day-to-Day Ops Map",
+            "Ops Map",
         ),
         "poc_guide": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
             "Task POC Guide",
-        ),
-        "cost_calc": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h2m4 0h3M7 12h2m4 0h3M7 16h2m4 0h3"/></svg>',
-            "Cost Calculator",
         ),
         "ext_tools": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
@@ -1664,29 +1742,25 @@ with st.sidebar:
         ),
     }
 
-    # Admin-only nav entries
-    _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
-    if _current_role == "admin":
-        _NAV["analytics"] = (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
-            "Analytics Dashboard",
-        )
-        _NAV["rate_mgr"] = (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
-            "Rate Manager",
-        )
+    _nav_group("Tools", _NAV_TOOLS)
+    _nav_group("Reference", _NAV_REF)
 
-    for key, (svg, label) in _NAV.items():
-        active = st.session_state["page"] == key
-        if active:
-            st.markdown(
-                f"""<div style="background:linear-gradient(135deg,#f1f5f9 0%,#e8ecf0 100%);border:1px solid #dde3ea;border-left:3px solid #1f2937;border-radius:8px;padding:9px 12px;color:#111827;font-size:0.83rem;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:9px;font-family:'Inter',sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);">{svg}&nbsp;{label}</div>""",
-                unsafe_allow_html=True,
-            )
-        else:
-            if st.button(label, key=f"nav_{key}", use_container_width=True):
-                st.session_state["page"] = key
-                st.rerun()
+    if _current_role == "admin":
+        _NAV_ADMIN = {
+            "analytics": (
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
+                "Analytics Dashboard",
+            ),
+            "rate_mgr": (
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+                "Rate Manager",
+            ),
+            "user_mgmt": (
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>',
+                "User Management",
+            ),
+        }
+        _nav_group("Admin", _NAV_ADMIN)
 
     st.markdown('<hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0 10px 0;">', unsafe_allow_html=True)
 
@@ -1775,6 +1849,7 @@ def save_submission(form_data: dict, client_name: str, username: str) -> None:
         "client_name": client_name,
         "saved_at": datetime.now().isoformat(),
         "saved_by": username,
+        "status": st.session_state.get(f"_sub_status_{filename}", "Submitted"),
         "form_data": form_data,
         "session_state": snapshot,
     }
@@ -1795,11 +1870,15 @@ def list_submissions() -> list[dict]:
         try:
             with open(p, encoding="utf-8") as fh:
                 data = json.load(fh)
+            _mods = data.get("form_data", {}).get("Modules Selected", {}).get("Selected Modules", [])
+            _mods_str = ", ".join(_mods) if isinstance(_mods, list) else str(_mods) if _mods else "—"
             result.append({
-                "filename": p.name,
+                "filename":    p.name,
                 "client_name": data.get("client_name", p.stem),
-                "saved_at": data.get("saved_at", ""),
-                "saved_by": data.get("saved_by", ""),
+                "saved_at":    data.get("saved_at", ""),
+                "saved_by":    data.get("saved_by", ""),
+                "modules":     _mods_str,
+                "status":      data.get("status", "Submitted"),
             })
         except Exception:
             pass
@@ -1827,6 +1906,60 @@ def load_submission(filename: str) -> None:
         st.session_state[k] = v
     st.session_state["_editing_submission_file"] = filename
     st.rerun()
+
+
+def _update_submission_status(filename: str, status: str) -> None:
+    """Write a new status field into an existing submission JSON file."""
+    path = _SUBMISSIONS_DIR / filename
+    if not path.exists():
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["status"] = status
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, default=_json_default)
+        list_submissions.clear()
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
+# ── Auto-draft helpers ────────────────────────────────────────────────────────
+
+def _draft_path(username: str) -> Path:
+    safe = re.sub(r"[^a-z0-9_]", "", username.lower())
+    return Path(f".42s_draft_{safe}.json")
+
+
+def _save_draft(username: str, form_data: dict) -> None:
+    try:
+        snapshot = {k: v for k, v in st.session_state.items()
+                    if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES)}
+        payload = {
+            "form_data": form_data,
+            "session_state": snapshot,
+            "saved_at": datetime.now().isoformat(),
+        }
+        _draft_path(username).write_text(json.dumps(payload, default=_json_default))
+    except OSError:
+        pass
+
+
+def _load_draft(username: str) -> dict | None:
+    p = _draft_path(username)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _clear_draft(username: str) -> None:
+    try:
+        _draft_path(username).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1893,6 +2026,176 @@ def _validate_form(form_data, modules):
     return errors
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FORM TEMPLATES  (stored in form_templates.json next to app.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TEMPLATES_FILE = Path("form_templates.json")
+
+
+def _load_form_templates() -> dict:
+    if not _TEMPLATES_FILE.exists():
+        return {}
+    try:
+        return json.loads(_TEMPLATES_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_form_template(name: str, snapshot: dict) -> None:
+    tpls = _load_form_templates()
+    tpls[name] = {"snapshot": snapshot, "saved_at": datetime.now().isoformat()}
+    try:
+        _TEMPLATES_FILE.write_text(json.dumps(tpls, indent=2, default=_json_default))
+    except OSError:
+        pass
+
+
+def _delete_form_template(name: str) -> None:
+    tpls = _load_form_templates()
+    tpls.pop(name, None)
+    try:
+        _TEMPLATES_FILE.write_text(json.dumps(tpls, indent=2, default=_json_default))
+    except OSError:
+        pass
+
+
+def _extract_domains_from_submission(form_data: dict) -> list[str]:
+    """Collect all unique domain values from every module section of a form_data dict."""
+    domains: list[str] = []
+    for _section in form_data.values():
+        if isinstance(_section, dict):
+            _d = _section.get("Domains")
+            if isinstance(_d, list):
+                domains.extend(_d)
+    return list(dict.fromkeys(d for d in domains if d))  # dedup, preserve order
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: DASHBOARD
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_dashboard():
+    _display = st.session_state.get("display_name") or st.session_state.get("current_user") or "there"
+    st.markdown(
+        f'<h2 style="font-family:\'Inter\',sans-serif;font-size:1.5rem;font-weight:700;'
+        f'color:#111827;margin:0 0 4px 0;">Welcome back, {_h(_display)} 👋</h2>'
+        f'<p style="color:#6b7280;font-size:0.85rem;margin:0 0 24px 0;">'
+        f'{date.today().strftime("%A, %d %B %Y")}</p>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Stats cards ───────────────────────────────────────────────────────────
+    submissions = list_submissions()
+    total        = len(submissions)
+    in_review    = sum(1 for s in submissions if s.get("status") == "In Review")
+    live         = sum(1 for s in submissions if s.get("status") == "Live")
+    this_week    = sum(
+        1 for s in submissions
+        if s.get("saved_at", "") >= (date.today() - timedelta(days=7)).isoformat()
+    )
+
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    for col, label, value, accent, filter_val in [
+        (sc1, "Total Submissions", total,     "#1f2937", "All"),
+        (sc2, "In Review",        in_review,  "#f59e0b", "In Review"),
+        (sc3, "Live",             live,       "#16a34a", "Live"),
+        (sc4, "This Week",        this_week,  "#3b82f6", "All"),
+    ]:
+        with col:
+            st.markdown(
+                f'<div style="background:white;border-radius:12px;padding:18px 20px 10px 20px;'
+                f'border-left:4px solid {accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);'
+                f'font-family:\'Inter\',sans-serif;">'
+                f'<div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;'
+                f'font-weight:700;letter-spacing:0.08em;">{label}</div>'
+                f'<div style="font-size:1.8rem;font-weight:800;color:{accent};margin-top:6px;">{value}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("View →", key=f"dash_stat_{label}", use_container_width=True):
+                st.session_state["hist_status_filter_init"] = filter_val
+                st.session_state["page"] = "sub_history"
+                st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Quick actions ─────────────────────────────────────────────────────────
+    section_header("⚡", "Quick Actions")
+    qa_cols = st.columns(4)
+    _quick_actions = [
+        ("main",       "📝", "New Requirement",   "Start a new client requirement form"),
+        ("feasibility","🔍", "Feasibility Check",  "Evaluate crawl feasibility"),
+        ("cost_calc",  "💰", "Cost Calculator",    "Estimate crawl costs"),
+        ("sub_history","📂", "Submission History", "View & manage submissions"),
+    ]
+    for col, (pg, icon, label, desc) in zip(qa_cols, _quick_actions):
+        with col:
+            st.markdown(
+                f'<div style="background:white;border-radius:12px;padding:16px;'
+                f'border:1px solid #e5e7eb;text-align:center;font-family:\'Inter\',sans-serif;'
+                f'min-height:90px;">'
+                f'<div style="font-size:1.5rem;">{icon}</div>'
+                f'<div style="font-size:0.82rem;font-weight:600;color:#1f2937;margin-top:6px;">{label}</div>'
+                f'<div style="font-size:0.72rem;color:#9ca3af;margin-top:2px;">{desc}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(f"Open", key=f"dash_qa_{pg}", use_container_width=True):
+                st.session_state["page"] = pg
+                st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Recent submissions ────────────────────────────────────────────────────
+    section_header("🕐", "Recent Submissions")
+    if not submissions:
+        st.info("No submissions yet. Create one from the New Requirement Form.")
+    else:
+        STATUS_COLORS = {"Submitted": "#3b82f6", "In Review": "#f59e0b",
+                         "Live": "#16a34a", "Draft": "#94a3b8"}
+        rh1, rh2, rh3, rh4 = st.columns([2.5, 1.8, 1.5, 1])
+        for col, lbl in zip([rh1, rh2, rh3, rh4], ["Client", "Date", "Status", ""]):
+            col.markdown(
+                f'<div style="font-size:0.72rem;font-weight:700;color:#6b7280;'
+                f'text-transform:uppercase;padding:4px 0;">{lbl}</div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown('<hr style="margin:4px 0 8px 0;border-color:#e5e7eb;">', unsafe_allow_html=True)
+
+        for s in submissions[:8]:
+            rc1, rc2, rc3, rc4 = st.columns([2.5, 1.8, 1.5, 1])
+            status = s.get("status", "Submitted")
+            color  = STATUS_COLORS.get(status, "#94a3b8")
+            with rc1:
+                st.markdown(
+                    f'<div style="font-size:0.85rem;font-weight:600;color:#1f2937;padding:5px 0;">'
+                    f'{_h(s["client_name"])}</div>',
+                    unsafe_allow_html=True,
+                )
+            with rc2:
+                st.markdown(
+                    f'<div style="font-size:0.8rem;color:#6b7280;padding:5px 0;">'
+                    f'{_h(s.get("saved_at","")[:10])}</div>',
+                    unsafe_allow_html=True,
+                )
+            with rc3:
+                st.markdown(
+                    f'<span style="background:{color};color:#fff;border-radius:4px;'
+                    f'padding:2px 8px;font-size:0.72rem;font-weight:600;">{_h(status)}</span>',
+                    unsafe_allow_html=True,
+                )
+            with rc4:
+                if st.button("Edit", key=f"dash_edit_{s['filename']}", use_container_width=True):
+                    load_submission(s["filename"])
+                    st.session_state["page"] = "main"
+                    st.rerun()
+            st.markdown('<hr style="margin:2px 0;border-color:#f8fafc;">', unsafe_allow_html=True)
+
+        if total > 8:
+            if st.button(f"View all {total} submissions →", key="dash_view_all"):
+                st.session_state["page"] = "sub_history"
+                st.rerun()
 
 
 def render_main_form():
@@ -1900,6 +2203,63 @@ def render_main_form():
         "New Requirement Form",
         "Capture complete client crawl requirements for project planning and scoping."
     )
+
+    _form_username = st.session_state.get("current_user", "")
+
+    # ── Auto-draft restore prompt ──────────────────────────────────────────
+    _draft = _load_draft(_form_username)
+    if _draft and not st.session_state.get("_draft_dismissed") and not st.session_state.get("_editing_submission_file"):
+        _draft_time = _draft.get("saved_at", "")[:16].replace("T", " ")
+        st.markdown(
+            f'<div style="background:#fffbeb;border:1px solid #f59e0b;border-left:4px solid #f59e0b;'
+            f'border-radius:8px;padding:12px 16px;margin-bottom:12px;font-family:\'Inter\',sans-serif;">'
+            f'<span style="font-size:0.88rem;font-weight:700;color:#92400e;">📋 Unsaved draft found</span>'
+            f'<span style="font-size:0.82rem;color:#78350f;margin-left:8px;">Last saved {_h(_draft_time)}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        _dc1, _dc2, _ = st.columns([1, 1, 4])
+        with _dc1:
+            if st.button("Resume Draft", key="_resume_draft_btn"):
+                _ISO_DATE_RE2 = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+                for k, v in _draft.get("session_state", {}).items():
+                    if isinstance(v, str) and _ISO_DATE_RE2.match(v):
+                        try: v = date.fromisoformat(v)
+                        except ValueError: pass
+                    st.session_state[k] = v
+                st.session_state["_draft_dismissed"] = True
+                st.rerun()
+        with _dc2:
+            if st.button("Discard Draft", key="_discard_draft_btn"):
+                _clear_draft(_form_username)
+                st.session_state["_draft_dismissed"] = True
+                st.rerun()
+
+    # ── Load Template ─────────────────────────────────────────────────────────
+    _tpls = _load_form_templates()
+    if _tpls:
+        with st.expander("📋  Load a template", expanded=False):
+            _tpl_choice = st.selectbox(
+                "Select template",
+                list(_tpls.keys()),
+                key="_tpl_select",
+                label_visibility="collapsed",
+            )
+            tc1, tc2, _ = st.columns([1, 1, 3])
+            with tc1:
+                if st.button("⬆️  Load Template", key="_tpl_load_btn"):
+                    _ISO_DATE_RE3 = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+                    for k, v in _tpls[_tpl_choice]["snapshot"].items():
+                        if isinstance(v, str) and _ISO_DATE_RE3.match(v):
+                            try: v = date.fromisoformat(v)
+                            except ValueError: pass
+                        st.session_state[k] = v
+                    st.session_state["_editing_submission_file"] = None
+                    st.rerun()
+            with tc2:
+                if st.button("🗑️  Delete Template", key="_tpl_del_btn"):
+                    _delete_form_template(_tpl_choice)
+                    st.rerun()
 
     # ── Load Previous Submission ───────────────────────────────────────────
     _saved = list_submissions()
@@ -1944,13 +2304,14 @@ def render_main_form():
         c1, c2 = st.columns([2, 1])
         with c1:
             client_name = st.text_input("Client Name *", placeholder="e.g., Unilever India", key="form_client_name")
+            if not client_name and st.session_state.get("_form_touched"):
+                st.markdown('<p style="color:#ef4444;font-size:0.75rem;margin:-8px 0 4px 0;">Required — enter the client name</p>', unsafe_allow_html=True)
         with c2:
             priority = st.selectbox("Priority Level", ["High", "Medium", "Low"], key="form_priority")
 
         c3, c4 = st.columns(2)
         with c3:
             default_date = date.today() + timedelta(days=4)
-
             completion_date = st.date_input(
                 "Expected Completion Date",
                 value=default_date,
@@ -1958,6 +2319,12 @@ def render_main_form():
             )
         with c4:
             expected_market = st.text_input("Target Market / Geography *", placeholder="e.g., India, Southeast Asia", key="form_target_market")
+            if not expected_market and st.session_state.get("_form_touched"):
+                st.markdown('<p style="color:#ef4444;font-size:0.75rem;margin:-8px 0 4px 0;">Required — enter the target market</p>', unsafe_allow_html=True)
+
+        # Mark form as "touched" once any field is non-empty, to enable inline hints
+        if client_name or expected_market:
+            st.session_state["_form_touched"] = True
 
         form_data["Client Information"] = {
             "Client Name":            client_name,
@@ -1965,6 +2332,10 @@ def render_main_form():
             "Expected Completion":    str(completion_date),
             "Target Market":          expected_market,
         }
+
+        # Auto-save draft whenever client name is present
+        if client_name:
+            _save_draft(_form_username, form_data)
 
         validate_required(client_name)
 
@@ -2105,6 +2476,27 @@ def render_main_form():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # ── Save as Template ──────────────────────────────────────────────────
+        with st.expander("💾  Save current form as a template", expanded=False):
+            _tpl_name_input = st.text_input(
+                "Template name",
+                placeholder="e.g. Standard QCommerce Setup",
+                key="_save_tpl_name",
+                label_visibility="collapsed",
+            )
+            if st.button("Save Template", key="_save_tpl_btn"):
+                if not _tpl_name_input.strip():
+                    st.error("Give the template a name.")
+                else:
+                    _tpl_snapshot = {
+                        k: v for k, v in st.session_state.items()
+                        if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES)
+                    }
+                    _save_form_template(_tpl_name_input.strip(), _tpl_snapshot)
+                    st.success(f"Template '{_tpl_name_input.strip()}' saved.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
         # PDF Generation + Download (single button)
         if st.button("⬇️  Generate & Download PDF", type="primary", use_container_width=True):
             if not client_name:
@@ -2125,6 +2517,8 @@ def render_main_form():
                 st.stop()
             try:
                 save_submission(form_data, client_name, st.session_state.get("current_user", ""))
+                _clear_draft(_form_username)
+                st.session_state["_draft_dismissed"] = False
             except Exception:
                 pass
             log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
@@ -2544,6 +2938,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
+    st.caption("💡 Click nodes to expand/collapse · Scroll to zoom · Drag to pan · Reload if diagram is blank")
     components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 def render_ops_map():
@@ -2788,6 +3183,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
+    st.caption("💡 Click nodes to expand/collapse · Scroll to zoom · Drag to pan · Reload if diagram is blank")
     components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 def render_poc_guide():
@@ -3030,6 +3426,7 @@ function click(e,d){
   update(d);
 }
 </script>"""
+    st.caption("💡 Click nodes to expand/collapse · Scroll to zoom · Drag to pan · Reload if diagram is blank")
     components.html(_html.replace("{_D3_INLINE}", _D3_INLINE), height=1000, scrolling=False)
 
 
@@ -3348,13 +3745,60 @@ def render_cost_calculator():
 
     # ── Step 1: Platform Selection ────────────────────────────────────────────
     section_header("🌐", "Step 1 — Select Platforms")
-    selected_domains = st.multiselect(
-        "Choose platforms to include in this estimate",
-        options=PLATFORM_LIST,
-        format_func=lambda x: PLATFORM_DISPLAY.get(x, x),
-        key="cc_selected_domains",
-        placeholder="Select one or more platforms...",
+    _input_mode = st.radio(
+        "Input method",
+        ["Select from list", "Paste comma-separated", "Upload CSV"],
+        horizontal=True,
+        key="cc_domain_input_mode",
+        label_visibility="collapsed",
     )
+
+    if _input_mode == "Select from list":
+        selected_domains = st.multiselect(
+            "Choose platforms to include in this estimate",
+            options=PLATFORM_LIST,
+            format_func=lambda x: PLATFORM_DISPLAY.get(x, x),
+            key="cc_selected_domains",
+            placeholder="Select one or more platforms...",
+        )
+
+    elif _input_mode == "Paste comma-separated":
+        _raw_paste = st.text_area(
+            "Paste domain names (comma-separated)",
+            placeholder="e.g. amazon.in, flipkart.com, blinkit.com",
+            key="cc_bulk_paste",
+            height=80,
+        )
+        _parsed_paste = [d.strip() for d in _raw_paste.split(",") if d.strip()]
+        _unknown_paste = [d for d in _parsed_paste if d not in PLATFORM_LIST]
+        if _unknown_paste:
+            st.warning(f"Not in rate config (skipped): {', '.join(_unknown_paste)}")
+        selected_domains = [d for d in _parsed_paste if d in PLATFORM_LIST]
+        st.session_state["cc_selected_domains"] = selected_domains
+
+    else:  # Upload CSV
+        import io as _io
+        _csv_file = st.file_uploader(
+            "Upload CSV (one domain per row, or comma-separated in first column)",
+            type=["csv"],
+            key="cc_bulk_csv",
+        )
+        if _csv_file:
+            import csv as _csv_mod
+            _reader = _csv_mod.reader(_io.StringIO(_csv_file.getvalue().decode()))
+            _all_csv = []
+            for _row in _reader:
+                for _cell in _row:
+                    _all_csv.extend([c.strip() for c in _cell.split(",") if c.strip()])
+            _unknown_csv = [d for d in _all_csv if d not in PLATFORM_LIST]
+            if _unknown_csv:
+                st.warning(f"Not in rate config (skipped): {', '.join(_unknown_csv)}")
+            selected_domains = [d for d in _all_csv if d in PLATFORM_LIST]
+            st.session_state["cc_selected_domains"] = selected_domains
+            if selected_domains:
+                st.success(f"Loaded {len(selected_domains)} domain(s): {', '.join(PLATFORM_DISPLAY.get(d,d) for d in selected_domains)}")
+        else:
+            selected_domains = st.session_state.get("cc_selected_domains", [])
 
     if not selected_domains:
         st.markdown("""
@@ -3370,7 +3814,13 @@ def render_cost_calculator():
 
     # ── Step 2: Per-Domain Configuration ─────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
-    section_header("⚙️", "Step 2 — Configure Crawl Types")
+    _step2_hdr, _step2_btn = st.columns([3, 1])
+    with _step2_hdr:
+        section_header("⚙️", "Step 2 — Configure Crawl Types")
+    with _step2_btn:
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        if st.button("📊 Generate ↓", key="cc_gen_top", use_container_width=True, type="primary"):
+            st.session_state["cc_show_results"] = True
 
     for domain in selected_domains:
         display_name = PLATFORM_DISPLAY.get(domain, domain)
@@ -3439,16 +3889,44 @@ def render_cost_calculator():
                 st.markdown('<div style="height:1px;background:#f1f5f9;margin:6px 0 2px 0;"></div>',
                             unsafe_allow_html=True)
 
-    # ── Generate button ───────────────────────────────────────────────────────
+    # ── Generate / Scenario buttons ───────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
-    _, btn_col, _ = st.columns([2, 1, 2])
-    with btn_col:
+    g1, g2, g3 = st.columns([2, 1, 2])
+    with g1:
+        _scenario_name = st.text_input(
+            "Scenario name (optional)",
+            placeholder="e.g. With Zipcode / High Freq",
+            key="cc_scenario_name",
+            label_visibility="collapsed",
+        )
+    with g2:
         if st.button("📊  Generate Estimate", use_container_width=True, type="primary"):
             st.session_state["cc_show_results"] = True
             components.html(
                 "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
                 height=0,
             )
+    with g3:
+        if st.session_state.get("cc_show_results"):
+            _sname = (_scenario_name.strip() or
+                      f"Scenario {len(st.session_state.get('cc_saved_scenarios', {})) + 1}")
+            if st.button(f"💾  Save as '{_sname}'", use_container_width=True):
+                st.session_state.setdefault("cc_saved_scenarios", {})
+                # Snapshot current widget values for this scenario
+                _snap = {
+                    "domains": list(selected_domains),
+                    "config": {
+                        k: v for k, v in st.session_state.items()
+                        if isinstance(k, str) and k.startswith("cc_") and k not in (
+                            "cc_show_results", "cc_saved_scenarios",
+                            "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
+                            "cc_scenario_name",
+                        )
+                    },
+                }
+                _snap["results"] = list(st.session_state.get("_cc_last_results", []))
+                st.session_state["cc_saved_scenarios"][_sname] = _snap
+                st.success(f"Saved scenario '{_sname}'")
 
     if not st.session_state.get("cc_show_results"):
         return
@@ -3490,6 +3968,8 @@ def render_cost_calculator():
         st.session_state["cc_show_results"] = False
         st.warning("No crawl types configured. Select crawl types for at least one platform.")
         return
+
+    st.session_state["_cc_last_results"] = results
 
     # ── Results header ────────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
@@ -3579,6 +4059,45 @@ def render_cost_calculator():
         </div>""", unsafe_allow_html=True)
 
     # ── Downloads ─────────────────────────────────────────────────────────────
+    # ── Scenario Comparison ───────────────────────────────────────────────────
+    _saved_scenarios = st.session_state.get("cc_saved_scenarios", {})
+    if len(_saved_scenarios) >= 2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        section_header("🗂️", "Scenario Comparison")
+
+        # Build comparison dataframe
+        _all_keys = sorted({(r["display"], r["crawl_type"], r["zip_mode"])
+                            for sc in _saved_scenarios.values()
+                            for r in sc.get("results", [])})
+        _comp_rows = []
+        for _disp, _ct, _zm in _all_keys:
+            _row = {"Platform": _disp, "Crawl Type": _ct, "Zipcode": _zm}
+            for _sc_name, _sc_data in _saved_scenarios.items():
+                _match = next(
+                    (r for r in _sc_data.get("results", [])
+                     if r["display"] == _disp and r["crawl_type"] == _ct and r["zip_mode"] == _zm),
+                    None,
+                )
+                _row[_sc_name] = f"${_match['total_cost']:,.4f}" if _match else "—"
+            _comp_rows.append(_row)
+
+        if _comp_rows:
+            st.dataframe(pd.DataFrame(_comp_rows), use_container_width=True, hide_index=True)
+
+            # Grand total row
+            _gt_row = {"Platform": "**Grand Total**", "Crawl Type": "", "Zipcode": ""}
+            for _sc_name, _sc_data in _saved_scenarios.items():
+                _gt = sum(r["total_cost"] for r in _sc_data.get("results", []))
+                _gt_row[_sc_name] = f"${_gt:,.4f}"
+            st.dataframe(pd.DataFrame([_gt_row]), use_container_width=True, hide_index=True)
+
+        if st.button("🗑️  Clear All Scenarios", key="cc_clear_scenarios"):
+            st.session_state["cc_saved_scenarios"] = {}
+            st.rerun()
+
+    elif len(_saved_scenarios) == 1:
+        st.caption("Save one more scenario to enable side-by-side comparison.")
+
     section_header("📥", "Download Estimate")
     dl1, dl2, _ = st.columns([1, 1, 2])
 
@@ -3661,15 +4180,6 @@ def render_rate_manager():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Date update strip ─────────────────────────────────────────────────────
-    section_header("📅", "Rates Last Updated Date")
-    new_date = st.text_input(
-        "Set the 'Rates Last Updated' date (stored in every row of the CSV)",
-        value=last_updated,
-        key="rate_mgr_date",
-        placeholder="e.g. 24 Mar 2026",
-    )
-
     # ── Editable rate table ───────────────────────────────────────────────────
     section_header("📋", "Rate Table")
     st.markdown(
@@ -3679,12 +4189,13 @@ def render_rate_manager():
         unsafe_allow_html=True,
     )
 
-    edit_df = df[["domain", "display_name", "zipcode", "sku_rate", "cat_rate", "kw_rate"]].copy()
+    edit_df = df[["domain", "display_name", "zipcode", "sku_rate", "cat_rate", "kw_rate", "last_updated"]].copy()
     edit_df["zipcode"] = edit_df["zipcode"].astype(str).str.lower().map(
         {"true": True, "false": False, "1": True, "0": False}
     ).fillna(False).astype(bool)
     for col in ("sku_rate", "cat_rate", "kw_rate"):
         edit_df[col] = pd.to_numeric(edit_df[col], errors="coerce").fillna(0.0)
+    edit_df["last_updated"] = edit_df["last_updated"].astype(str).replace("nan", "").fillna("")
 
     edited = st.data_editor(
         edit_df,
@@ -3698,8 +4209,25 @@ def render_rate_manager():
             "sku_rate":     st.column_config.NumberColumn("SKU Rate",    help="Cost per SKU crawl",      format="%.10f", min_value=0.0),
             "cat_rate":     st.column_config.NumberColumn("Category Rate", help="Cost per category crawl", format="%.10f", min_value=0.0),
             "kw_rate":      st.column_config.NumberColumn("Keyword Rate", help="Cost per keyword crawl",  format="%.10f", min_value=0.0),
+            "last_updated": st.column_config.TextColumn("Last Updated",  help="e.g. 24 Mar 2026",  width="medium"),
         },
     )
+
+    # ── Apply global date to all rows ─────────────────────────────────────────
+    apply_col, toggle_col, _ = st.columns([2, 1, 1])
+    with toggle_col:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        apply_all = st.checkbox("Apply to all sites", key="rate_mgr_apply_all")
+    with apply_col:
+        picked_date = st.date_input(
+            "Set Last Updated date",
+            value=date.today(),
+            key="rate_mgr_apply_date",
+            format="DD/MM/YYYY",
+        )
+    apply_date_str = picked_date.strftime("%d %b %Y") if apply_all else ""
+    if apply_all:
+        st.caption(f"On save, all rows will be stamped with **{apply_date_str}**.")
 
     # ── Save ─────────────────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
@@ -3714,11 +4242,336 @@ def render_rate_manager():
                     st.error(f"{len(missing)} row(s) have an empty Domain — fill them in before saving.")
                 else:
                     save_df = edited.copy()
-                    save_df["last_updated"] = new_date.strip() or last_updated
+                    if apply_date_str:
+                        save_df["last_updated"] = apply_date_str
                     save_df["zipcode"] = save_df["zipcode"].astype(bool)
                     save_df.to_csv(_RATES_CSV, index=False)
                     st.success(f"Saved {len(save_df)} rows to crawl_cost_rates.csv")
                     st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: USER MANAGEMENT  (admin only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_user_management():
+    page_title("User Management", "Add users, reset passwords, change roles, and deactivate accounts.")
+
+    # ── Current users table ───────────────────────────────────────────────────
+    section_header("👥", "Current Users")
+    _users = list_users()
+    _me = st.session_state.get("current_user", "")
+    _admins = [u for u in _users if u["role"] == "admin" and u["active"]]
+
+    _display_rows = [
+        {
+            "Username":     u["username"],
+            "Display Name": u["display_name"],
+            "Role":         u["role"],
+            "Status":       "Active" if u["active"] else "Deactivated",
+        }
+        for u in _users
+    ]
+    st.dataframe(pd.DataFrame(_display_rows), use_container_width=True, hide_index=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    tab_add, tab_pwd, tab_role, tab_deact = st.tabs(
+        ["➕ Add User", "🔑 Reset Password", "🎭 Change Role", "🚫 Deactivate / Activate"]
+    )
+
+    # ── Add User ──────────────────────────────────────────────────────────────
+    with tab_add:
+        with st.form("um_add_form"):
+            a1, a2 = st.columns(2)
+            with a1:
+                _new_uname  = st.text_input("Username *", placeholder="e.g. priya")
+                _new_disp   = st.text_input("Display Name *", placeholder="e.g. Priya")
+            with a2:
+                _new_pwd    = st.text_input("Password *", type="password")
+                _new_role   = st.selectbox("Role", ["viewer", "admin"])
+            if st.form_submit_button("➕  Add User", type="primary"):
+                if not _new_uname.strip() or not _new_pwd.strip() or not _new_disp.strip():
+                    st.error("Username, Display Name and Password are required.")
+                elif add_user(_new_uname.strip(), _new_pwd.strip(), _new_disp.strip(), _new_role):
+                    save_users()
+                    st.success(f"User '{_new_uname.strip()}' added successfully.")
+                    st.rerun()
+                else:
+                    st.error(f"Username '{_new_uname.strip()}' already exists.")
+
+    # ── Reset Password ────────────────────────────────────────────────────────
+    with tab_pwd:
+        with st.form("um_pwd_form"):
+            _pwd_uname = st.selectbox("Select user", [u["username"] for u in _users])
+            _new_pwd2  = st.text_input("New Password *", type="password")
+            _conf_pwd  = st.text_input("Confirm Password *", type="password")
+            if st.form_submit_button("🔑  Reset Password", type="primary"):
+                if not _new_pwd2.strip():
+                    st.error("Password cannot be empty.")
+                elif _new_pwd2 != _conf_pwd:
+                    st.error("Passwords do not match.")
+                elif set_password(_pwd_uname, _new_pwd2.strip()):
+                    save_users()
+                    st.success(f"Password updated for '{_pwd_uname}'.")
+                else:
+                    st.error("Failed to update password.")
+
+    # ── Change Role ───────────────────────────────────────────────────────────
+    with tab_role:
+        with st.form("um_role_form"):
+            _role_users = [u for u in _users if u["username"] != _me]
+            if _role_users:
+                _role_uname   = st.selectbox("Select user", [u["username"] for u in _role_users])
+                _current_role = next((u["role"] for u in _users if u["username"] == _role_uname), "viewer")
+                _new_role2    = st.selectbox("New role", ["viewer", "admin"],
+                                             index=0 if _current_role == "viewer" else 1)
+                if st.form_submit_button("🎭  Update Role", type="primary"):
+                    _target_admins = [u for u in _users if u["role"] == "admin" and u["active"] and u["username"] != _role_uname]
+                    if _new_role2 == "viewer" and not _target_admins:
+                        st.error("Cannot demote the last active admin.")
+                    elif set_role(_role_uname, _new_role2):
+                        save_users()
+                        st.success(f"'{_role_uname}' is now a {_new_role2}.")
+                    else:
+                        st.error("Failed to update role.")
+            else:
+                st.info("No other users to manage roles for.")
+
+    # ── Deactivate / Activate ─────────────────────────────────────────────────
+    with tab_deact:
+        with st.form("um_deact_form"):
+            _deact_others = [u for u in _users if u["username"] != _me]
+            if _deact_others:
+                _deact_uname  = st.selectbox("Select user", [u["username"] for u in _deact_others])
+                _is_active    = next((u["active"] for u in _users if u["username"] == _deact_uname), True)
+                _action_label = "🚫  Deactivate" if _is_active else "✅  Activate"
+                if st.form_submit_button(_action_label, type="primary"):
+                    if _is_active:
+                        _remaining_admins = [u for u in _admins if u["username"] != _deact_uname]
+                        _deact_role = next((u["role"] for u in _users if u["username"] == _deact_uname), "viewer")
+                        if _deact_role == "admin" and not _remaining_admins:
+                            st.error("Cannot deactivate the last active admin.")
+                        else:
+                            set_active(_deact_uname, False)
+                            save_users()
+                            st.success(f"'{_deact_uname}' has been deactivated.")
+                            st.rerun()
+                    else:
+                        set_active(_deact_uname, True)
+                        save_users()
+                        st.success(f"'{_deact_uname}' has been re-activated.")
+                        st.rerun()
+            else:
+                st.info("No other users to manage.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: SUBMISSION HISTORY
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_submission_history():
+    page_title("Submission History", "Browse, filter, and manage all saved client requirement submissions.")
+
+    submissions = list_submissions()
+    if not submissions:
+        st.info("No submissions found yet. Generate a PDF from the New Requirement Form to create one.")
+        return
+
+    VALID_STATUSES = ["Submitted", "In Review", "Live", "Draft"]
+    STATUS_COLORS  = {
+        "Submitted":  "#3b82f6",
+        "In Review":  "#f59e0b",
+        "Live":       "#16a34a",
+        "Draft":      "#94a3b8",
+    }
+
+    # ── Search / filter bar ───────────────────────────────────────────────────
+    # Consume any preset filter coming from dashboard stat cards
+    _status_preset = st.session_state.pop("hist_status_filter_init", "All")
+    _all_statuses  = ["All"] + VALID_STATUSES
+    _preset_idx    = _all_statuses.index(_status_preset) if _status_preset in _all_statuses else 0
+
+    f1, f2, f3 = st.columns([3, 2, 2])
+    with f1:
+        _search = st.text_input("Search by client name", placeholder="Type to filter…", key="hist_search", label_visibility="collapsed")
+    with f2:
+        _status_filter = st.selectbox("Filter by status", _all_statuses, index=_preset_idx, key="hist_status_filter", label_visibility="collapsed")
+    with f3:
+        _saved_by_filter = st.selectbox(
+            "Filter by user",
+            ["All"] + sorted({s["saved_by"] for s in submissions if s.get("saved_by")}),
+            key="hist_user_filter",
+            label_visibility="collapsed",
+        )
+
+    filtered = [
+        s for s in submissions
+        if (_search.lower() in s["client_name"].lower() if _search else True)
+        and (_status_filter == "All" or s.get("status") == _status_filter)
+        and (_saved_by_filter == "All" or s.get("saved_by") == _saved_by_filter)
+    ]
+
+    st.markdown(f'<p style="font-size:0.78rem;color:#94a3b8;margin:4px 0 12px 0;">{len(filtered)} of {len(submissions)} submissions</p>', unsafe_allow_html=True)
+
+    if not filtered:
+        st.info("No submissions match the current filters.")
+        return
+
+    # ── Table header ──────────────────────────────────────────────────────────
+    hc1, hc2, hc3, hc4, hc5 = st.columns([2.5, 1.8, 2.5, 1.5, 3])
+    for col, label in zip([hc1, hc2, hc3, hc4, hc5],
+                          ["Client", "Date", "Modules", "Status", "Actions"]):
+        col.markdown(f'<div style="font-size:0.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;padding:4px 0;">{label}</div>', unsafe_allow_html=True)
+
+    st.markdown('<hr style="margin:4px 0 8px 0;border-color:#e5e7eb;">', unsafe_allow_html=True)
+
+    # ── Rows ──────────────────────────────────────────────────────────────────
+    for s in filtered:
+        rc1, rc2, rc3, rc4, rc5 = st.columns([2.5, 1.8, 2.5, 1.5, 3])
+        status_now = s.get("status", "Submitted")
+        color      = STATUS_COLORS.get(status_now, "#94a3b8")
+        _fkey      = s["filename"]
+
+        with rc1:
+            st.markdown(f'<div style="font-size:0.85rem;font-weight:600;color:#1f2937;padding:6px 0;">{_h(s["client_name"])}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:0.72rem;color:#9ca3af;">by {_h(s.get("saved_by","—"))}</div>', unsafe_allow_html=True)
+        with rc2:
+            _dt = s.get("saved_at","")[:16].replace("T"," ")
+            st.markdown(f'<div style="font-size:0.82rem;color:#374151;padding:6px 0;">{_h(_dt)}</div>', unsafe_allow_html=True)
+        with rc3:
+            st.markdown(f'<div style="font-size:0.78rem;color:#64748b;padding:6px 0;">{_h(s.get("modules","—"))}</div>', unsafe_allow_html=True)
+        with rc4:
+            new_status = st.selectbox(
+                "status",
+                VALID_STATUSES,
+                index=VALID_STATUSES.index(status_now) if status_now in VALID_STATUSES else 0,
+                key=f"hist_status_{_fkey}",
+                label_visibility="collapsed",
+            )
+            if new_status != status_now:
+                _update_submission_status(_fkey, new_status)
+                st.toast(f"Status updated to **{new_status}**", icon="✅")
+                st.rerun()
+            st.markdown(
+                f'<span style="background:{color};color:#fff;border-radius:4px;padding:2px 8px;'
+                f'font-size:0.72rem;font-weight:600;">{_h(status_now)}</span>',
+                unsafe_allow_html=True,
+            )
+        with rc5:
+            a1, a2, a3 = st.columns(3)
+            a4, a5, _  = st.columns(3)
+            with a1:
+                if st.button("✏️ Edit", key=f"hist_edit_{_fkey}", use_container_width=True):
+                    load_submission(_fkey)
+            with a2:
+                if st.button("💰 Cost Calc", key=f"hist_cost_{_fkey}", use_container_width=True):
+                    _sub_path = _SUBMISSIONS_DIR / _fkey
+                    if _sub_path.exists():
+                        try:
+                            _sub_data = json.loads(_sub_path.read_text())
+                            _domains  = _extract_domains_from_submission(_sub_data.get("form_data", {}))
+                            if _domains:
+                                st.session_state["cc_selected_domains"] = _domains
+                                st.session_state["cc_domain_input_mode"] = "Select from list"
+                        except (OSError, json.JSONDecodeError):
+                            pass
+                    st.session_state["page"] = "cost_calc"
+                    st.rerun()
+            with a3:
+                if st.button("🔍 Feasibility", key=f"hist_feas_{_fkey}", use_container_width=True):
+                    _sub_path = _SUBMISSIONS_DIR / _fkey
+                    if _sub_path.exists():
+                        try:
+                            _sub_data = json.loads(_sub_path.read_text())
+                            _fd       = _sub_data.get("form_data", {})
+                            _domains  = _extract_domains_from_submission(_fd)
+                            st.session_state["feas_client"]      = _sub_data.get("client_name", "")
+                            st.session_state["feas_num_domains"] = max(len(_domains), 1)
+                            for _i, _d in enumerate(_domains):
+                                st.session_state[f"feas_domain_{_i}"] = _d
+                        except (OSError, json.JSONDecodeError):
+                            pass
+                    st.session_state["page"] = "feasibility"
+                    st.rerun()
+            with a4:
+                if st.button("📝 Notes", key=f"hist_note_{_fkey}", use_container_width=True):
+                    st.session_state[f"_show_notes_{_fkey}"] = not st.session_state.get(f"_show_notes_{_fkey}", False)
+            with a5:
+                if st.button("🗑️ Delete", key=f"hist_del_{_fkey}", use_container_width=True):
+                    st.session_state[f"_confirm_del_{_fkey}"] = True
+
+        # ── Inline Notes ──────────────────────────────────────────────────────
+        if st.session_state.get(f"_show_notes_{_fkey}"):
+            _sub_path = _SUBMISSIONS_DIR / _fkey
+            _notes = []
+            if _sub_path.exists():
+                try:
+                    _sub_data = json.loads(_sub_path.read_text())
+                    _notes = _sub_data.get("notes", [])
+                except (OSError, json.JSONDecodeError):
+                    pass
+
+            with st.container():
+                st.markdown('<div style="background:#f8fafc;border-radius:8px;padding:12px 16px;border:1px solid #e5e7eb;margin:4px 0 8px 0;">', unsafe_allow_html=True)
+
+                if _notes:
+                    for _n in _notes:
+                        _n_ts   = _n.get("timestamp","")[:16].replace("T"," ")
+                        _n_auth = _n.get("author","—")
+                        _n_txt  = _n.get("text","")
+                        st.markdown(
+                            f'<div style="margin-bottom:8px;font-family:\'Inter\',sans-serif;">'
+                            f'<span style="font-size:0.72rem;color:#6b7280;">'
+                            f'{_h(_n_auth)} · {_h(_n_ts)}</span><br>'
+                            f'<span style="font-size:0.83rem;color:#1f2937;">{_h(_n_txt)}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    st.caption("No notes yet.")
+
+                _note_input = st.text_input(
+                    "Add a note",
+                    placeholder="e.g. Client confirmed zipcode on 20 Mar",
+                    key=f"note_input_{_fkey}",
+                    label_visibility="collapsed",
+                )
+                if st.button("Add Note", key=f"note_save_{_fkey}") and _note_input.strip():
+                    if _sub_path.exists():
+                        try:
+                            _sub_data = json.loads(_sub_path.read_text())
+                            _sub_data.setdefault("notes", []).append({
+                                "author":    st.session_state.get("current_user",""),
+                                "timestamp": datetime.now().isoformat(),
+                                "text":      _note_input.strip(),
+                            })
+                            _sub_path.write_text(json.dumps(_sub_data, indent=2, default=_json_default))
+                            list_submissions.clear()
+                        except (OSError, json.JSONDecodeError):
+                            pass
+                    st.rerun()
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Inline delete confirmation ─────────────────────────────────────────
+        if st.session_state.get(f"_confirm_del_{_fkey}"):
+            conf_col, cancel_col, _ = st.columns([1, 1, 4])
+            with conf_col:
+                if st.button("Confirm Delete", key=f"hist_del_confirm_{_fkey}", type="primary"):
+                    try:
+                        (_SUBMISSIONS_DIR / _fkey).unlink(missing_ok=True)
+                        list_submissions.clear()
+                    except OSError:
+                        pass
+                    st.session_state.pop(f"_confirm_del_{_fkey}", None)
+                    st.rerun()
+            with cancel_col:
+                if st.button("Cancel", key=f"hist_del_cancel_{_fkey}"):
+                    st.session_state.pop(f"_confirm_del_{_fkey}", None)
+                    st.rerun()
+
+        st.markdown('<hr style="margin:2px 0;border-color:#f1f5f9;">', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3885,15 +4738,27 @@ def render_analytics():
             })
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
-        raw_events = load_events(days)
-        if raw_events:
-            csv_data = pd.DataFrame(raw_events).to_csv(index=False).encode()
+        _dl1, _dl2 = st.columns([1, 1])
+        with _dl1:
+            _filtered_csv = pd.DataFrame(rows).to_csv(index=False).encode()
             st.download_button(
-                "⬇️  Export Full Log (CSV)",
-                data=csv_data,
-                file_name=f"analytics_log_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                "⬇️  Export Activity Table (CSV)",
+                data=_filtered_csv,
+                file_name=f"analytics_{period_label.replace(' ','_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
+                key="analytics_dl_filtered",
             )
+        with _dl2:
+            raw_events = load_events(days)
+            if raw_events:
+                csv_data = pd.DataFrame(raw_events).to_csv(index=False).encode()
+                st.download_button(
+                    "⬇️  Export Full Raw Log (CSV)",
+                    data=csv_data,
+                    file_name=f"analytics_raw_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="analytics_dl_raw",
+                )
     else:
         st.info("No activity recorded yet.")
 
@@ -3923,7 +4788,8 @@ elif not st.session_state["authenticated"]:
             st.rerun()
         else:
             # Token is invalid/expired — wipe it from localStorage
-            st.session_state["ls_clear"] = True
+            st.session_state["ls_clear"]        = True
+            st.session_state["_session_expired"] = True
             st.rerun()
 
 
@@ -3944,7 +4810,9 @@ else:
             page,
         )
         st.session_state["analytics_last_page"] = page
-    if page == "main":
+    if page == "dashboard":
+        render_dashboard()
+    elif page == "main":
         render_main_form()
     elif page == "feasibility":
         render_feasibility()
@@ -3956,6 +4824,24 @@ else:
         render_poc_guide()
     elif page == "cost_calc":
         render_cost_calculator()
+    elif page == "sub_history":
+        render_submission_history()
+    elif page == "user_mgmt":
+        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+        if _role == "admin":
+            render_user_management()
+        else:
+            st.error("Access denied. This page is restricted to administrators.")
+            st.session_state["page"] = "main"
+            st.rerun()
+    elif page == "rate_mgr":
+        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+        if _role == "admin":
+            render_rate_manager()
+        else:
+            st.error("Access denied. This page is restricted to administrators.")
+            st.session_state["page"] = "main"
+            st.rerun()
     elif page == "analytics":
         _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
         if _role == "admin":

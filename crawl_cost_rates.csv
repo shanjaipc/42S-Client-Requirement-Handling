@@ -1,15 +1,15 @@
 domain,display_name,zipcode,sku_rate,cat_rate,kw_rate,last_updated
 swiggy.com,Swiggy,False,0.0,0.0,0.0,24 Mar 2026
 swiggy.com,Swiggy,True,0.0,0.0,0.0,24 Mar 2026
-blinkit.com,Blinkit,False,0.000014,0.000000214,0.0000000235,24 Mar 2026
-blinkit.com,Blinkit,True,0.000014,0.0000154,0.0000007,24 Mar 2026
+blinkit.com,Blinkit,False,1.4e-05,2.14e-07,2.35e-08,24 Mar 2026
+blinkit.com,Blinkit,True,1.4e-05,1.54e-05,7e-07,24 Mar 2026
 zeptonow.com,Zeptonow,False,0.0,0.0,0.0,24 Mar 2026
 zeptonow.com,Zeptonow,True,0.0,0.0,0.0,24 Mar 2026
-amazon.in,Amazon,False,0.000821,0.000822,0.00000333,24 Mar 2026
-amazon.in,Amazon,True,0.000821,0.000822,0.00000333,24 Mar 2026
-flipkart.com,Flipkart,False,0.000056,0.0000571,0.0000028,24 Mar 2026
-flipkart.com,Flipkart,True,0.000056,0.0000571,0.0000028,24 Mar 2026
+amazon.in,Amazon,False,0.000821,0.000822,3.33e-06,24 Mar 2026
+amazon.in,Amazon,True,0.000821,0.000822,3.33e-06,24 Mar 2026
+flipkart.com,Flipkart,False,5.6e-05,5.71e-05,2.8e-06,24 Mar 2026
+flipkart.com,Flipkart,True,5.6e-05,5.71e-05,2.8e-06,24 Mar 2026
 myntra.com,Myntra,False,0.0,0.0,0.0,24 Mar 2026
-myntra.com,Myntra,True,0.0000757,0.00000154,0.0,24 Mar 2026
-ajio.com,Ajio,False,0.000072,0.0000731,0.0000028,24 Mar 2026
-ajio.com,Ajio,True,0.000072,0.0000731,0.0000028,24 Mar 2026
+myntra.com,Myntra,True,7.57e-05,1.54e-06,0.0,24 Mar 2026
+ajio.com,Ajio,False,7.2e-05,7.31e-05,2.8e-06,24 Mar 2026
+ajio.com,Ajio,True,7.2e-05,7.31e-05,2.8e-06,24 Mar 2026
