@@ -37,6 +37,10 @@ PAGE_LABELS: Dict[str, str] = {
     "ext_tools":   "External Tools",
     "notebooklm":  "NotebookLM",
     "login":       "Login",
+    "dashboard":   "Dashboard",
+    "sub_history": "Submission History",
+    "user_mgmt":   "User Management",
+    "rate_mgr":    "Rate Manager",
 }
 
 # Event type constants

@@ -21,8 +21,10 @@ and replace the old entry in USERS.
 """
 
 import hashlib
+import json
 import secrets
 import sys
+from pathlib import Path
 from typing import Dict, Optional, Any
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +97,15 @@ USERS: Dict[str, Any] = {
     },
 }
 
+# ── Sidecar DB: persists runtime user changes across restarts ─────────────────
+_USERS_DB = Path(__file__).parent / "users_db.json"
+if _USERS_DB.exists():
+    try:
+        _stored = json.loads(_USERS_DB.read_text())
+        USERS.update(_stored)
+    except (OSError, json.JSONDecodeError):
+        pass
+
 # Maximum failed login attempts before lockout
 MAX_ATTEMPTS = 5
 # Lockout duration in seconds
@@ -118,13 +129,25 @@ def hash_password(password: str) -> dict:
     return {"salt": salt, "hash": key.hex()}
 
 
-def verify_password(username: str, password: str) -> bool:
-    """Constant-time comparison of a candidate password against stored hash.
-    Returns True only if username exists AND password matches."""
+def get_user(username: str) -> Optional[Dict[str, Any]]:
+    """Return the user record (without hash/salt) or None if not found."""
     user = USERS.get(username.strip().lower())
     if user is None:
-        # Run the hash anyway to prevent username-enumeration via timing
+        return None
+    return {
+        "display_name": user["display_name"],
+        "role":         user["role"],
+        "active":       user.get("active", True),
+    }
+
+
+def verify_password(username: str, password: str) -> bool:
+    """Constant-time comparison. Also blocks deactivated accounts."""
+    user = USERS.get(username.strip().lower())
+    if user is None:
         hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), b"dummy", 260_000)
+        return False
+    if not user.get("active", True):
         return False
     candidate = hashlib.pbkdf2_hmac(
         "sha256",
@@ -135,12 +158,68 @@ def verify_password(username: str, password: str) -> bool:
     return secrets.compare_digest(candidate, user["hash"])
 
 
-def get_user(username: str) -> Optional[Dict[str, Any]]:
-    """Return the user record (without hash/salt) or None if not found."""
-    user = USERS.get(username.strip().lower())
-    if user is None:
-        return None
-    return {"display_name": user["display_name"], "role": user["role"]}
+# ── Runtime user management ───────────────────────────────────────────────────
+
+def save_users() -> None:
+    """Persist the current USERS dict to users_db.json."""
+    try:
+        _USERS_DB.write_text(json.dumps(USERS, indent=2))
+    except OSError:
+        pass
+
+
+def list_users() -> list:
+    return [
+        {
+            "username":     u,
+            "display_name": v["display_name"],
+            "role":         v["role"],
+            "active":       v.get("active", True),
+        }
+        for u, v in USERS.items()
+    ]
+
+
+def add_user(username: str, password: str, display_name: str, role: str = "viewer") -> bool:
+    """Add a new user. Returns False if username already exists."""
+    key = username.strip().lower()
+    if key in USERS:
+        return False
+    creds = hash_password(password)
+    USERS[key] = {
+        "salt":         creds["salt"],
+        "hash":         creds["hash"],
+        "display_name": display_name,
+        "role":         role,
+        "active":       True,
+    }
+    return True
+
+
+def set_password(username: str, new_password: str) -> bool:
+    key = username.strip().lower()
+    if key not in USERS:
+        return False
+    creds = hash_password(new_password)
+    USERS[key]["salt"] = creds["salt"]
+    USERS[key]["hash"] = creds["hash"]
+    return True
+
+
+def set_role(username: str, role: str) -> bool:
+    key = username.strip().lower()
+    if key not in USERS or role not in ("admin", "viewer"):
+        return False
+    USERS[key]["role"] = role
+    return True
+
+
+def set_active(username: str, active: bool) -> bool:
+    key = username.strip().lower()
+    if key not in USERS:
+        return False
+    USERS[key]["active"] = active
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
