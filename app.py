@@ -11,6 +11,7 @@ import time
 import json
 import uuid
 from pathlib import Path
+from typing import Optional
 import pandas as pd # type: ignore
 from credentials import (
     verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS,
@@ -1954,7 +1955,7 @@ def _save_draft(username: str, form_data: dict) -> None:
         pass
 
 
-def _load_draft(username: str) -> dict | None:
+def _load_draft(username: str) -> Optional[dict]:
     p = _draft_path(username)
     if not p.exists():
         return None
