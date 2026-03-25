@@ -1573,6 +1573,15 @@ def render_login():
         time.sleep(1)
         st.rerun()
 
+    # ── Session-expiry notice ─────────────────────────────────────────────
+    if st.session_state.get("_session_expired"):
+        st.markdown("""<div role="alert" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fed7aa;border-left:4px solid #f97316;border-radius:12px;padding:14px 18px;margin-bottom:4px;color:#7c2d12;font-family:'Inter',sans-serif;font-size:.875rem;display:flex;align-items:center;gap:12px;">
+<span style="font-size:1.4rem;flex-shrink:0;">&#9201;</span>
+<div><div style="font-weight:700;margin-bottom:3px;">Session expired</div>
+<div style="opacity:.85;">Your session has expired. Please sign in again.</div>
+</div></div>""", unsafe_allow_html=True)
+        st.session_state["_session_expired"] = False
+
     # ── Form (st.form enables Enter-to-submit) ────────────────────────────
     with st.form("login_form", clear_on_submit=False):
         username = st.text_input(
@@ -2107,7 +2116,7 @@ def render_dashboard():
                 f'<div style="background:white;border-radius:12px;padding:18px 20px 10px 20px;'
                 f'border-left:4px solid {accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);'
                 f'font-family:\'Inter\',sans-serif;">'
-                f'<div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;'
+                f'<div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;'
                 f'font-weight:700;letter-spacing:0.08em;">{label}</div>'
                 f'<div style="font-size:1.8rem;font-weight:800;color:{accent};margin-top:6px;">{value}</div>'
                 f'</div>',
@@ -2141,7 +2150,7 @@ def render_dashboard():
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            if st.button(f"Open", key=f"dash_qa_{pg}", use_container_width=True):
+            if st.button(f"Open →", key=f"dash_qa_{pg}", use_container_width=True):
                 st.session_state["page"] = pg
                 st.rerun()
 
@@ -2484,7 +2493,7 @@ def render_main_form():
                 key="_save_tpl_name",
                 label_visibility="collapsed",
             )
-            if st.button("Save Template", key="_save_tpl_btn"):
+            if st.button("💾  Save Template", key="_save_tpl_btn"):
                 if not _tpl_name_input.strip():
                     st.error("Give the template a name.")
                 else:
@@ -2566,25 +2575,54 @@ def render_feasibility():
     with c1:
         st.markdown("""
         <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Purpose</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Purpose</div>
             <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Pre-project scoping</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown("""
         <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Output</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Output</div>
             <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Word Document (.docx)</div>
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""
         <div style="background:white;border-radius:12px;padding:18px 20px;border-left:4px solid #1f2937;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow 0.2s;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Use Case</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.09em;font-weight:700;font-family:'Inter',sans-serif;">Use Case</div>
             <div style="font-size:0.9rem;font-weight:600;color:#111827;margin-top:5px;font-family:'Inter',sans-serif;">Share with tech / ops team</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    col, _ = st.columns([3, 1])
+    col, side = st.columns([3, 1])
+    with side:
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);
+                    border:1px solid #e5e7eb;border-radius:12px;padding:16px;
+                    font-family:'Inter',sans-serif;margin-top:8px;">
+            <div style="font-size:0.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;
+                        letter-spacing:0.08em;margin-bottom:10px;">📄 What's included</div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#374151;">
+                    <span style="color:#16a34a;font-weight:700;">✓</span> Client &amp; requestor info
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#374151;">
+                    <span style="color:#16a34a;font-weight:700;">✓</span> Full domain list
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#374151;">
+                    <span style="color:#16a34a;font-weight:700;">✓</span> Crawl type &amp; features
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#374151;">
+                    <span style="color:#16a34a;font-weight:700;">✓</span> Zipcode requirements
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#374151;">
+                    <span style="color:#16a34a;font-weight:700;">✓</span> Additional notes
+                </div>
+            </div>
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;
+                        font-size:0.72rem;color:#9ca3af;">
+                Output: <strong style="color:#374151;">.docx</strong> — share directly with the tech / ops team.
+            </div>
+        </div>""", unsafe_allow_html=True)
     with col:
 
         # Requirement Information
@@ -3900,7 +3938,7 @@ def render_cost_calculator():
             label_visibility="collapsed",
         )
     with g2:
-        if st.button("📊  Generate Estimate", use_container_width=True, type="primary"):
+        if st.button("📊  Generate Estimate ↓", use_container_width=True, type="primary"):
             st.session_state["cc_show_results"] = True
             components.html(
                 "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
@@ -3991,7 +4029,7 @@ def render_cost_calculator():
             <div style="background:white;border-radius:12px;padding:16px 18px;
             border-left:4px solid {accent};box-shadow:0 2px 8px rgba(0,0,0,0.07);
             font-family:'Inter',sans-serif;">
-                <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;
+                <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;
                 letter-spacing:0.09em;font-weight:700;">{lbl}</div>
                 <div style="font-size:1.15rem;font-weight:700;color:#0f172a;margin-top:5px;">{val}</div>
             </div>""", unsafe_allow_html=True)
@@ -4160,21 +4198,21 @@ def render_rate_manager():
         st.markdown(f"""
         <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #1f2937;
         box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Domains</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Domains</div>
             <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{df['domain'].nunique()}</div>
         </div>""", unsafe_allow_html=True)
     with m2:
         st.markdown(f"""
         <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #0369a1;
         box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rates Last Updated</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rates Last Updated</div>
             <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{last_updated}</div>
         </div>""", unsafe_allow_html=True)
     with m3:
         st.markdown(f"""
         <div style="background:white;border-radius:10px;padding:14px 16px;border-left:4px solid #16a34a;
         box-shadow:0 1px 4px rgba(0,0,0,0.06);font-family:'Inter',sans-serif;">
-            <div style="font-size:0.67rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rate Rows</div>
+            <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;font-weight:700;">Rate Rows</div>
             <div style="font-size:1.1rem;font-weight:700;color:#0f172a;margin-top:4px;">{len(df)}</div>
         </div>""", unsafe_allow_html=True)
 
@@ -4214,10 +4252,19 @@ def render_rate_manager():
     )
 
     # ── Apply global date to all rows ─────────────────────────────────────────
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);
+                border:1px solid #bae6fd;border-left:4px solid #0369a1;
+                border-radius:10px;padding:14px 18px;margin:16px 0 8px 0;
+                font-family:'Inter',sans-serif;">
+        <div style="font-size:0.78rem;font-weight:700;color:#0c4a6e;margin-bottom:2px;">
+            📅 Bulk Date Stamp
+        </div>
+        <div style="font-size:0.78rem;color:#0369a1;">
+            Pick a date and check the box to apply it to all rows on save.
+        </div>
+    </div>""", unsafe_allow_html=True)
     apply_col, toggle_col, _ = st.columns([2, 1, 1])
-    with toggle_col:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        apply_all = st.checkbox("Apply to all sites", key="rate_mgr_apply_all")
     with apply_col:
         picked_date = st.date_input(
             "Set Last Updated date",
@@ -4225,9 +4272,15 @@ def render_rate_manager():
             key="rate_mgr_apply_date",
             format="DD/MM/YYYY",
         )
+    with toggle_col:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        apply_all = st.checkbox("Apply to all sites", key="rate_mgr_apply_all")
     apply_date_str = picked_date.strftime("%d %b %Y") if apply_all else ""
     if apply_all:
-        st.caption(f"On save, all rows will be stamped with **{apply_date_str}**.")
+        st.markdown(f"""<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;
+                         padding:9px 14px;font-size:0.8rem;color:#166534;font-family:'Inter',sans-serif;">
+            ✅ All rows will be stamped with <strong>{apply_date_str}</strong> when you save.
+        </div>""", unsafe_allow_html=True)
 
     # ── Save ─────────────────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
@@ -4263,16 +4316,36 @@ def render_user_management():
     _me = st.session_state.get("current_user", "")
     _admins = [u for u in _users if u["role"] == "admin" and u["active"]]
 
-    _display_rows = [
-        {
-            "Username":     u["username"],
-            "Display Name": u["display_name"],
-            "Role":         u["role"],
-            "Status":       "Active" if u["active"] else "Deactivated",
-        }
-        for u in _users
-    ]
-    st.dataframe(pd.DataFrame(_display_rows), use_container_width=True, hide_index=True)
+    # styled user cards table
+    st.markdown("""
+    <div style="display:grid;grid-template-columns:1fr 1fr 120px 100px;
+                gap:0;background:#f1f5f9;border-radius:10px 10px 0 0;
+                padding:9px 16px;font-family:'Inter',sans-serif;">
+        <div style="font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">Username</div>
+        <div style="font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">Display Name</div>
+        <div style="font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">Role</div>
+        <div style="font-size:0.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">Status</div>
+    </div>""", unsafe_allow_html=True)
+    for _u in _users:
+        _role_color  = "#6366f1" if _u["role"] == "admin" else "#64748b"
+        _role_bg     = "#eef2ff" if _u["role"] == "admin" else "#f1f5f9"
+        _stat_color  = "#16a34a" if _u["active"] else "#dc2626"
+        _stat_bg     = "#f0fdf4" if _u["active"] else "#fef2f2"
+        _stat_label  = "Active"  if _u["active"] else "Deactivated"
+        _you_badge   = f'<span style="font-size:0.62rem;background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600;">you</span>' if _u["username"] == _me else ""
+        st.markdown(f"""
+        <div style="display:grid;grid-template-columns:1fr 1fr 120px 100px;
+                    gap:0;background:#fff;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;
+                    border-bottom:1px solid #f1f5f9;padding:11px 16px;
+                    font-family:'Inter',sans-serif;align-items:center;">
+            <div style="font-size:0.85rem;font-weight:600;color:#111827;">{_u['username']}{_you_badge}</div>
+            <div style="font-size:0.85rem;color:#374151;">{_u['display_name']}</div>
+            <div><span style="background:{_role_bg};color:{_role_color};border-radius:5px;
+                              padding:2px 9px;font-size:0.72rem;font-weight:700;">{_u['role'].capitalize()}</span></div>
+            <div><span style="background:{_stat_bg};color:{_stat_color};border-radius:5px;
+                              padding:2px 9px;font-size:0.72rem;font-weight:700;">{_stat_label}</span></div>
+        </div>""", unsafe_allow_html=True)
+    st.markdown('<div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;height:6px;background:#fff;"></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -4375,7 +4448,16 @@ def render_submission_history():
 
     submissions = list_submissions()
     if not submissions:
-        st.info("No submissions found yet. Generate a PDF from the New Requirement Form to create one.")
+        st.markdown("""
+        <div style="background:#fff;border:2px dashed #e5e7eb;border-radius:14px;
+                    padding:56px 20px;text-align:center;font-family:'Inter',sans-serif;margin-top:20px;">
+            <div style="font-size:2.5rem;margin-bottom:12px;">📋</div>
+            <div style="font-size:1rem;font-weight:700;color:#111827;margin-bottom:6px;">No submissions yet</div>
+            <div style="font-size:0.85rem;color:#6b7280;max-width:360px;margin:0 auto;">
+                Generate a PDF from the <strong>New Requirement Form</strong> to create your first submission.
+                It will appear here for tracking and reference.
+            </div>
+        </div>""", unsafe_allow_html=True)
         return
 
     VALID_STATUSES = ["Submitted", "In Review", "Live", "Draft"]
@@ -4415,7 +4497,13 @@ def render_submission_history():
     st.markdown(f'<p style="font-size:0.78rem;color:#94a3b8;margin:4px 0 12px 0;">{len(filtered)} of {len(submissions)} submissions</p>', unsafe_allow_html=True)
 
     if not filtered:
-        st.info("No submissions match the current filters.")
+        st.markdown("""
+        <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;
+                    padding:40px 20px;text-align:center;font-family:'Inter',sans-serif;margin-top:8px;">
+            <div style="font-size:2rem;margin-bottom:10px;">🔍</div>
+            <div style="font-size:0.95rem;font-weight:700;color:#374151;margin-bottom:4px;">No results found</div>
+            <div style="font-size:0.82rem;color:#9ca3af;">Try adjusting your search term or filters above.</div>
+        </div>""", unsafe_allow_html=True)
         return
 
     # ── Table header ──────────────────────────────────────────────────────────
@@ -4537,7 +4625,7 @@ def render_submission_history():
                     key=f"note_input_{_fkey}",
                     label_visibility="collapsed",
                 )
-                if st.button("Add Note", key=f"note_save_{_fkey}") and _note_input.strip():
+                if st.button("💬  Add Note", key=f"note_save_{_fkey}") and _note_input.strip():
                     if _sub_path.exists():
                         try:
                             _sub_data = json.loads(_sub_path.read_text())
@@ -4607,15 +4695,17 @@ def render_analytics():
             {sub_html}
         </div>"""
 
-    k1, k2, k3, k4, k5, k6, k7, k8 = st.columns(8)
-    k1.markdown(_kpi("Sessions",        summary["total_sessions"],    f"Today: {summary['today_sessions']}"), unsafe_allow_html=True)
-    k2.markdown(_kpi("Unique Users",    summary["unique_users"],      f"Today: {summary['today_users']}"),    unsafe_allow_html=True)
-    k3.markdown(_kpi("Total Logins",    summary["login_count"]),                                              unsafe_allow_html=True)
-    k4.markdown(_kpi("Total Events",    summary["total_events"]),                                             unsafe_allow_html=True)
-    k5.markdown(_kpi("Docs Generated",  summary["docs_generated"],    "PDFs & feasibility"),                  unsafe_allow_html=True)
-    k6.markdown(_kpi("Avg Pages/Session", summary["avg_session_depth"]),                                      unsafe_allow_html=True)
-    k7.markdown(_kpi("Peak Hour",       summary["peak_hour_label"],   "Most active"),                         unsafe_allow_html=True)
-    k8.markdown(_kpi("Top Page",        summary["most_visited"]),                                             unsafe_allow_html=True)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.markdown(_kpi("Sessions",          summary["total_sessions"],      f"Today: {summary['today_sessions']}"), unsafe_allow_html=True)
+    k2.markdown(_kpi("Unique Users",      summary["unique_users"],        f"Today: {summary['today_users']}"),    unsafe_allow_html=True)
+    k3.markdown(_kpi("Total Logins",      summary["login_count"]),                                                unsafe_allow_html=True)
+    k4.markdown(_kpi("Total Events",      summary["total_events"]),                                               unsafe_allow_html=True)
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    k5, k6, k7, k8 = st.columns(4)
+    k5.markdown(_kpi("Docs Generated",    summary["docs_generated"],      "PDFs & feasibility"),                  unsafe_allow_html=True)
+    k6.markdown(_kpi("Avg Pages/Session", summary["avg_session_depth"]),                                          unsafe_allow_html=True)
+    k7.markdown(_kpi("Peak Hour",         summary["peak_hour_label"],     "Most active"),                         unsafe_allow_html=True)
+    k8.markdown(_kpi("Top Page",          summary["most_visited"]),                                               unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -4639,7 +4729,7 @@ def render_analytics():
                     border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;
                     font-family:'Inter',sans-serif;text-align:center;">
             <div style="font-size:1.3rem;">{icon}</div>
-            <div style="font-size:0.68rem;color:#9ca3af;text-transform:uppercase;
+            <div style="font-size:0.7rem;color:#9ca3af;text-transform:uppercase;
                         letter-spacing:0.08em;margin:4px 0 2px 0;font-weight:600;">{label}</div>
             <div style="font-size:0.88rem;font-weight:700;color:#1f2937;">{val}</div>
         </div>""", unsafe_allow_html=True)
