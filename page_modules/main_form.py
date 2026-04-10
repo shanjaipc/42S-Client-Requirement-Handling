@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ui_helpers import (
-    _h, _safe_filename, section_header, page_title, info_row,
+    _h, _safe_filename, celebrate, section_header, page_title, info_row,
     frequency_selector, calculate_risk, _section_label, domain_selector,
     _safe_key, PREDEFINED_DOMAINS,
 )
@@ -845,7 +845,6 @@ def render_main_form():
             except Exception:
                 pass
             log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
-            from ui_helpers import celebrate
             celebrate(message="Downloading PDF…", sub=f"{_h(client_name)} Requirement Form is downloading.")
             _pdf_b64  = base64.b64encode(_pdf_bytes).decode()
             _pdf_name = _safe_filename(client_name, "_Requirement_Form.pdf")

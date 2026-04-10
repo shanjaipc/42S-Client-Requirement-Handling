@@ -219,6 +219,103 @@ def _delete_form_template(name: str) -> None:
         pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Cost estimate persistence
+# ─────────────────────────────────────────────────────────────────────────────
+
+_COST_ESTIMATES_DIR = Path("cost_estimates")
+_CC_KEY_PREFIXES = ("cc_",)
+
+
+def save_cost_estimate(client_name: str, username: str, results: list, grand_total: float, session_snapshot: dict) -> str:
+    """Save a cost estimate to disk. Returns the filename."""
+    _COST_ESTIMATES_DIR.mkdir(exist_ok=True)
+    editing_file = st.session_state.get("_editing_cost_file")
+    if editing_file and (_COST_ESTIMATES_DIR / editing_file).exists():
+        filename = editing_file
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", client_name or "unknown")
+        filename = f"{safe_name}_{timestamp}.json"
+    payload = {
+        "client_name": client_name,
+        "saved_at": datetime.now().isoformat(),
+        "saved_by": username,
+        "grand_total": grand_total,
+        "results": results,
+        "session_state": session_snapshot,
+    }
+    with open(_COST_ESTIMATES_DIR / filename, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, default=_json_default)
+    st.session_state["_editing_cost_file"] = filename
+    list_cost_estimates.clear()
+    return filename
+
+
+@st.cache_data(ttl=60)
+def list_cost_estimates() -> list[dict]:
+    if not _COST_ESTIMATES_DIR.exists():
+        return []
+    result = []
+    for p in sorted(_COST_ESTIMATES_DIR.glob("*.json"), reverse=True):
+        try:
+            with open(p, encoding="utf-8") as fh:
+                data = json.load(fh)
+            result.append({
+                "filename":    p.name,
+                "client_name": data.get("client_name", p.stem),
+                "saved_at":    data.get("saved_at", ""),
+                "saved_by":    data.get("saved_by", ""),
+                "grand_total": data.get("grand_total", 0.0),
+            })
+        except Exception:
+            pass
+    return result
+
+
+def load_cost_estimate(filename: str) -> None:
+    """Restore session state from a saved cost estimate."""
+    path = _COST_ESTIMATES_DIR / filename
+    if not path.exists():
+        st.error("Cost estimate file not found.")
+        return
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    # Keys that belong to Streamlit button/radio widgets — cannot be set via session_state
+    _CC_BLOCKED_KEYS = {
+        "cc_gen_top", "cc_currency", "cc_period", "cc_fx_rate",
+        "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
+        "cc_scenario_name", "cc_show_results", "cc_saved_scenarios",
+        "cc_clear_scenarios",
+        "_cc_save_btn", "_cc_save_new_btn", "_cc_new_btn",
+    }
+    _CC_BLOCKED_PREFIXES = ("cc_ct_", "cc_zip_")
+
+    for k, v in data.get("session_state", {}).items():
+        if k in _CC_BLOCKED_KEYS or any(k.startswith(p) for p in _CC_BLOCKED_PREFIXES):
+            continue
+        st.session_state[k] = v
+
+    # Also purge any blocked keys that may have been saved by older snapshots
+    for k in list(st.session_state.keys()):
+        if k in _CC_BLOCKED_KEYS or any(k.startswith(p) for p in _CC_BLOCKED_PREFIXES):
+            st.session_state.pop(k, None)
+
+    st.session_state["_editing_cost_file"] = filename
+    st.session_state["cc_show_results"] = True
+    st.rerun()
+
+
+def delete_cost_estimate(filename: str) -> None:
+    path = _COST_ESTIMATES_DIR / filename
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    list_cost_estimates.clear()
+
+
 def _extract_domains_from_submission(form_data: dict) -> list[str]:
     domains: list[str] = []
     for _section in form_data.values():
