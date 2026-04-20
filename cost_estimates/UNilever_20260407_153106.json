@@ -1,0 +1,63 @@
+{
+  "client_name": "UNilever",
+  "saved_at": "2026-04-09T15:55:24.191892",
+  "saved_by": "shanjai",
+  "grand_total": 0.6,
+  "results": [
+    {
+      "domain": "swiggy.com",
+      "display": "Swiggy",
+      "crawl_type": "Category Based",
+      "volume_per_crawl": 5000,
+      "freq": 1,
+      "days": 30,
+      "zip_mode": "Without Zipcode",
+      "rate": 0.0,
+      "cost_per_crawl": 0.0,
+      "total_cost": 0.0
+    },
+    {
+      "domain": "flipkart.com",
+      "display": "Flipkart",
+      "crawl_type": "Banner Crawl",
+      "volume_per_crawl": 20,
+      "freq": 1,
+      "days": 30,
+      "zip_mode": "Without Zipcode",
+      "rate": 0.001,
+      "cost_per_crawl": 0.02,
+      "total_cost": 0.6
+    }
+  ],
+  "session_state": {
+    "cc_ct_swiggy.com": [
+      "Category Based"
+    ],
+    "cc_flipkart.com_Banner Crawl_c": 1,
+    "cc_flipkart.com_SOS (Share of Search)_d": 30,
+    "cc_scenario_name": "",
+    "cc_flipkart.com_Banner Crawl_a": 20,
+    "cc_ct_flipkart.com": [
+      "Banner Crawl"
+    ],
+    "cc_selected_domains": [
+      "swiggy.com",
+      "flipkart.com"
+    ],
+    "cc_flipkart.com_SOS (Share of Search)_b": 60,
+    "cc_zip_swiggy.com": "Without Zipcode",
+    "cc_swiggy.com_Category Based_d": 30,
+    "cc_swiggy.com_Category Based_a": 100,
+    "cc_swiggy.com_Keyword Level_d": 30,
+    "cc_flipkart.com_SOS (Share of Search)_c": 1,
+    "cc_swiggy.com_Category Based_b": 50,
+    "cc_swiggy.com_Keyword Level_c": 1,
+    "cc_client_name": "UNilever",
+    "cc_swiggy.com_Keyword Level_a": 280,
+    "cc_swiggy.com_Keyword Level_b": 60,
+    "cc_flipkart.com_SOS (Share of Search)_a": 200,
+    "cc_flipkart.com_Banner Crawl_d": 30,
+    "cc_zip_flipkart.com": "Without Zipcode",
+    "cc_swiggy.com_Category Based_c": 1
+  }
+}

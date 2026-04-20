@@ -18,6 +18,7 @@ from persistence import (
 )
 
 LOGO_PATH = str(Path(__file__).parent.parent / "42slogo_top.png")
+SCREENSHOT_RATE_DEFAULT = 0.00044   # $/page — editable per site in the UI
 
 
 def _fmt_cost(v, symbol="$"):
@@ -108,6 +109,14 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
                       textColor=C_SUBINK, leading=12)
     sub_val_s   = _ps("SBV", fontSize=9, fontName="Helvetica-Bold",
                       textColor=C_INK, leading=12, alignment=TA_RIGHT)
+
+    # Screenshot row
+    C_SS = HexColor("#0369a1")   # steel blue for screenshot line
+    ss_lbl_s    = _ps("SSL", fontSize=8.5, fontName="Helvetica-Oblique",
+                      textColor=C_SS, leading=12)
+    ss_val_s    = _ps("SSV", fontSize=8.5, fontName="Helvetica-Bold",
+                      textColor=C_SS, leading=12, alignment=TA_RIGHT)
+    ss_cpm_s    = _ps("SSC", fontSize=8, textColor=C_SS, leading=12, alignment=TA_RIGHT)
 
     # Summary / grand total
     sum_th_s    = _ps("STH", fontSize=8.5, fontName="Helvetica-Bold",
@@ -302,10 +311,12 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
         domain_results = [r for r in results if r["domain"] == domain]
         if not domain_results:
             continue
-        display_name  = platform_display.get(domain, domain)
-        dom_total_usd = sum(r["total_cost"] for r in domain_results)
-        _dom_avg_days = (sum(r["total_cost"] * r["days"] for r in domain_results) / dom_total_usd) if dom_total_usd else 30
-        dom_total_str = _pf(dom_total_usd, _dom_avg_days)
+        display_name   = platform_display.get(domain, domain)
+        dom_crawl_usd  = sum(r["total_cost"] for r in domain_results)
+        dom_ss_usd     = sum(r.get("screenshot_total", 0) for r in domain_results)
+        dom_total_usd  = dom_crawl_usd + dom_ss_usd
+        _dom_avg_days  = (sum(r["total_cost"] * r["days"] for r in domain_results) / dom_crawl_usd) if dom_crawl_usd else 30
+        dom_total_str  = _pf(dom_total_usd, _dom_avg_days)
 
         # Canvas-drawn platform banner
         plat_hdr = _PlatformBannerFlowable(display_name, domain, dom_total_str, PAGE_W)
@@ -332,9 +343,24 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
                 Paragraph(_pf(r["cost_per_crawl"]), tdr_s),
                 Paragraph(_pf(r["total_cost"], r["days"]), tdr_s),
             ])
-        # Subtotal
+        # Screenshot row (shown before subtotal when rate > 0)
+        if dom_ss_usd > 0:
+            _ss_rate_val = domain_results[0].get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)
+            _ss_cpm_str  = f"{symbol}{_ss_rate_val * 1000:.4f}"
+            _ss_total_pages = sum(r.get("screenshot_total", 0) / r.get("screenshot_rate", SCREENSHOT_RATE_DEFAULT) for r in domain_results if r.get("screenshot_rate", 0) > 0)
+            rows.append([
+                Paragraph("  \u2937  Screenshots", ss_lbl_s),
+                Paragraph(f"{int(_ss_total_pages):,}", tdc_s),
+                Paragraph("", tdc_s),
+                Paragraph("", tdc_s),
+                Paragraph(_ss_cpm_str, ss_cpm_s),
+                Paragraph("", tdc_s),
+                Paragraph(_pf(dom_ss_usd, _dom_avg_days), ss_val_s),
+            ])
+
+        # Subtotal (crawl + screenshot)
         rows.append([
-            Paragraph("Subtotal", sub_lbl_s),
+            Paragraph("Platform Total", sub_lbl_s),
             Paragraph("", tdc_s), Paragraph("", tdc_s), Paragraph("", tdc_s),
             Paragraph("", tdc_s), Paragraph("", tdc_s),
             Paragraph(dom_total_str, sub_val_s),
@@ -368,9 +394,10 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
     ]]
     for domain in selected_domains:
         _dr  = [r for r in results if r["domain"] == domain]
-        _du  = sum(r["total_cost"] for r in _dr)
+        _du  = sum(r["total_cost"] + r.get("screenshot_total", 0) for r in _dr)
         if _du == 0: continue
-        _ad  = (sum(r["total_cost"] * r["days"] for r in _dr) / _du) if _du else 30
+        _crawl_usd = sum(r["total_cost"] for r in _dr)
+        _ad  = (sum(r["total_cost"] * r["days"] for r in _dr) / _crawl_usd) if _crawl_usd else 30
         sum_rows.append([
             Paragraph(_html_mod.escape(platform_display.get(domain, domain)), sum_td_s),
             Paragraph(_pf(_du, _ad), sum_val_s),
@@ -648,7 +675,7 @@ def render_cost_calculator():
         display_name = PLATFORM_DISPLAY.get(domain, domain)
 
         with st.expander(f"**{display_name}**  ·  {domain}", expanded=True):
-            col_ct, col_zip = st.columns([3, 1])
+            col_ct, col_zip, col_ss = st.columns([3, 1, 1])
             with col_ct:
                 selected_cts = st.multiselect(
                     "Crawl types",
@@ -660,13 +687,37 @@ def render_cost_calculator():
             with col_zip:
                 st.radio("Zipcode", ["Without Zipcode", "With Zipcode", "Both"],
                          key=f"cc_zip_{domain}")
+            with col_ss:
+                st.radio("Screenshot", ["Without Screenshot", "With Screenshot"],
+                         key=f"cc_ss_mode_{domain}")
 
             _zip_mode_now = st.session_state.get(f"cc_zip_{domain}", "Without Zipcode")
+            _ss_mode_now  = st.session_state.get(f"cc_ss_mode_{domain}", "Without Screenshot")
+            _extra_cols = []
             if _zip_mode_now in ("With Zipcode", "Both"):
-                _zc_col, _ = st.columns([1, 3])
-                with _zc_col:
-                    st.number_input("Number of Zipcodes", min_value=1, value=1, step=1,
-                                    key=f"cc_zipcount_{domain}")
+                _extra_cols.append("zip")
+            if _ss_mode_now == "With Screenshot":
+                _extra_cols.append("ss")
+
+            if _extra_cols:
+                _ecol_widths = [1] * len(_extra_cols) + [4 - len(_extra_cols)]
+                _ecols = st.columns(_ecol_widths)
+                _ci = 0
+                if "zip" in _extra_cols:
+                    with _ecols[_ci]:
+                        st.number_input("Number of Zipcodes", min_value=1, value=1, step=1,
+                                        key=f"cc_zipcount_{domain}")
+                    _ci += 1
+                if "ss" in _extra_cols:
+                    with _ecols[_ci]:
+                        st.number_input("Screenshot Pages/Crawl", min_value=1, value=500, step=50,
+                                        key=f"cc_ss_vol_{domain}")
+                    _ci += 1
+                    with _ecols[_ci]:
+                        st.number_input("📸 Rate ($/page)", min_value=0.0,
+                                        value=float(st.session_state.get(f"cc_{domain}_ss_rate", SCREENSHOT_RATE_DEFAULT)),
+                                        step=0.000001, format="%.6f",
+                                        key=f"cc_{domain}_ss_rate")
 
             if not selected_cts:
                 st.caption("No crawl types selected for this platform.")
@@ -710,6 +761,7 @@ def render_cost_calculator():
                     with c3: st.number_input("Duration (days)",   min_value=1, value=30,  step=1,  key=f"cc_{domain}_{ct}_d")
                 st.markdown('<div style="height:1px;background:#f1f5f9;margin:6px 0 2px 0;"></div>',
                             unsafe_allow_html=True)
+
 
     # ── Generate / Scenario buttons ───────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
@@ -772,6 +824,9 @@ def render_cost_calculator():
         )
 
         zip_count = st.session_state.get(f"cc_zipcount_{domain}", 1)
+        ss_mode   = st.session_state.get(f"cc_ss_mode_{domain}", "Without Screenshot")
+        ss_vol    = st.session_state.get(f"cc_ss_vol_{domain}", 0)
+        ss_rate   = st.session_state.get(f"cc_{domain}_ss_rate", SCREENSHOT_RATE_DEFAULT)
         for ct in selected_cts:
             a  = st.session_state.get(f"cc_{domain}_{ct}_a", 0)
             b  = st.session_state.get(f"cc_{domain}_{ct}_b", 0)
@@ -790,6 +845,8 @@ def render_cost_calculator():
                     "volume_per_crawl": effective_volume, "freq": c_, "days": d,
                     "zip_mode": zm, "rate": rate,
                     "cost_per_crawl": cpc, "total_cost": total,
+                    "screenshot_rate": ss_rate,
+                    "screenshot_total": (ss_vol * ss_rate * c_ * d) if ss_mode == "With Screenshot" else 0,
                 })
 
     if not results:
@@ -803,7 +860,7 @@ def render_cost_calculator():
     st.markdown("<br>", unsafe_allow_html=True)
     section_header("📊", "Cost Estimate Results")
 
-    grand_total_usd = sum(r["total_cost"] for r in results)
+    grand_total_usd = sum(r["total_cost"] + r.get("screenshot_total", 0) for r in results)
 
     # ── View controls: Currency + Period ──────────────────────────────────────
     _vc1, _vc2, _vc3, _vc4 = st.columns([1.2, 1, 1.2, 2.6])
@@ -862,7 +919,10 @@ def render_cost_calculator():
         st.info("All configured crawl types have a $0 rate. Check that the platforms and crawl types are correct, or update the rates in crawl_cost_rates.csv.")
 
     # Correct period-adjusted grand total: sum each row's period-scaled cost
-    _gt_period_val = sum(r["total_cost"] * _fx * _period_factor(r["days"]) for r in results)
+    _gt_period_val = sum(
+        (r["total_cost"] + r.get("screenshot_total", 0)) * _fx * _period_factor(r["days"])
+        for r in results
+    )
     _gt_display = _fmt_cost(_gt_period_val, _sym)
 
     s1, s2, s3, s4, s5 = st.columns(5)
@@ -891,9 +951,10 @@ def render_cost_calculator():
         if not domain_results:
             continue
         display_name = PLATFORM_DISPLAY.get(domain, domain)
-        domain_total_usd = sum(r["total_cost"] for r in domain_results)
-        # weighted-avg days for domain total period scaling
-        _dom_avg_days = sum(r["total_cost"] * r["days"] for r in domain_results) / domain_total_usd if domain_total_usd else 30
+        _dom_crawl_usd   = sum(r["total_cost"] for r in domain_results)
+        _dom_ss_usd      = sum(r.get("screenshot_total", 0) for r in domain_results)
+        domain_total_usd = _dom_crawl_usd + _dom_ss_usd
+        _dom_avg_days    = sum(r["total_cost"] * r["days"] for r in domain_results) / _dom_crawl_usd if _dom_crawl_usd else 30
         domain_total_disp = _fmt_c(domain_total_usd, _dom_avg_days)
 
         _period_note = "" if _period == "As configured" else f" <span style='font-size:0.72rem;color:#fbbf24;'>({_period})</span>"
@@ -927,6 +988,25 @@ def render_cost_calculator():
                 f'<td style="padding:10px 16px;text-align:center;font-size:0.78rem;color:#6366f1;font-weight:600;">{_cpm_val}</td>'
                 f'<td style="padding:10px 16px;text-align:right;">{_cpc_disp}</td>'
                 f'<td style="padding:10px 16px;text-align:right;">{_total_disp}</td>'
+                f'</tr>'
+            )
+
+        # Screenshot row (if any rate is set for this domain)
+        if _dom_ss_usd > 0:
+            _ss_r        = domain_results[0].get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)
+            _ss_period   = sum(r.get("screenshot_total", 0) * _fx * _period_factor(r["days"]) for r in domain_results)
+            _ss_disp     = _fmt_c(_ss_period)
+            _ss_pages    = sum(r["volume_per_crawl"] * r["freq"] * r["days"] for r in domain_results)
+            rows_html += (
+                f'<tr style="background:#eff6ff;border-bottom:1px solid #dbeafe;">'
+                f'<td style="padding:9px 16px;font-size:0.85rem;color:#1d4ed8;font-weight:500;font-style:italic;">📸 Screenshots</td>'
+                f'<td style="padding:9px 16px;text-align:center;font-size:0.8rem;color:#1d4ed8;">{int(_ss_pages):,} pages</td>'
+                f'<td style="padding:9px 16px;text-align:center;font-size:0.8rem;color:#6b7280;">—</td>'
+                f'<td style="padding:9px 16px;text-align:center;font-size:0.8rem;color:#6b7280;">—</td>'
+                f'<td style="padding:9px 16px;text-align:center;font-size:0.75rem;color:#6b7280;">—</td>'
+                f'<td style="padding:9px 16px;text-align:center;font-size:0.78rem;color:#1d4ed8;font-weight:600;">{_sym}{_ss_r*1000:.4f} CPM</td>'
+                f'<td style="padding:9px 16px;text-align:right;font-size:0.8rem;color:#1d4ed8;">—</td>'
+                f'<td style="padding:9px 16px;text-align:right;font-size:0.85rem;font-weight:700;color:#1d4ed8;">{_ss_disp}</td>'
                 f'</tr>'
             )
 
