@@ -1,0 +1,82 @@
+{
+  "client_name": "USA - specific crawls(Internal)",
+  "saved_at": "2026-04-09T10:43:25.412953",
+  "saved_by": "admin",
+  "status": "Submitted",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "USA - specific crawls(Internal)",
+      "Priority Level": "High",
+      "Expected Completion": "2026-03-25",
+      "Target Market": "USA"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Products + Trends, SOS (Search on Site)"
+    },
+    "Products + Trends": {
+      "Domains": "costco.com, amazon.com, walmart.com, target.com",
+      "Crawl Type": "Products Only",
+      "Overall Frequency": "Daily",
+      "Products Crawl Frequency": "Daily",
+      "Sample Input URLs": "",
+      "Client Inputs Sheet Link": "https://redmine.promptcloud.com/issues/374054",
+      "Pincode Based": "No",
+      "Expected Volume": "50000",
+      "Screenshot Required": "No",
+      "Specific Fields": "Brand name"
+    },
+    "SOS (Search on Site)": {
+      "No. of Keywords": 50,
+      "SOS Keywords Sheet Link": "https://docs.google.com/document/d/1SHGwtnulzCc0QIFynBVy7SbECGGGqpk3NRvvnaUVtLM/edit?usp=sharing",
+      "Domains": "costco.com, amazon.com, walmart.com, target.com",
+      "Zipcode Required": "No",
+      "No. of Pages per Keyword": 5,
+      "No. of Products per Keyword": 100,
+      "Frequency": "Daily"
+    },
+    "Final Alignment": {
+      "Client Core Objective": "Internal crawls to setup - US specific dashboards",
+      "Expectations From Us": ""
+    },
+    "Comments & Notes": {
+      "Additional Comments": "Product - one time crawl - twice - no site setups needed - if any please notify\nBrand names - category names - sub category names - Pricing - discount are mandatory fields and should not be missed. \nLimit to a maximum of 3 pages in each sub category to the lowest sub category level\nIf there are any free data fields please add the number of products for the sub category or the category. "
+    }
+  },
+  "session_state": {
+    "sos_freq": "Daily",
+    "sos_keyword_count": 50,
+    "form_priority": "High",
+    "form_completion_date": "2026-03-25",
+    "pt_prodonly_inputs_sheet_link": "https://redmine.promptcloud.com/issues/374054",
+    "pt_domains": [],
+    "pt_overall_daily": 1,
+    "pt_overall_freq": "Daily",
+    "sos_domains": [],
+    "form_client_name": "USA - specific crawls(Internal)",
+    "pt_prodonly_freq": "Daily",
+    "form_modules": [
+      "Products + Trends",
+      "SOS (Search on Site)"
+    ],
+    "pt_custom_domain": "costco.com, amazon.com, walmart.com, target.com",
+    "pt_specific_fields": "Brand name",
+    "sos_products": 100,
+    "sos_daily": 1,
+    "final_objective": "Internal crawls to setup - US specific dashboards",
+    "pt_prodonly_expected_volume": "50000",
+    "form_target_market": "USA",
+    "pt_prodonly_screenshot": "No",
+    "sos_keywords_sheet_link": "https://docs.google.com/document/d/1SHGwtnulzCc0QIFynBVy7SbECGGGqpk3NRvvnaUVtLM/edit?usp=sharing",
+    "final_comments": "Product - one time crawl - twice - no site setups needed - if any please notify\nBrand names - category names - sub category names - Pricing - discount are mandatory fields and should not be missed. \nLimit to a maximum of 3 pages in each sub category to the lowest sub category level\nIf there are any free data fields please add the number of products for the sub category or the category. ",
+    "sos_keywords_source": "Client Provided",
+    "final_expectation": "",
+    "pt_prodonly_daily": 1,
+    "pt_crawl_type": "Products Only",
+    "sos_custom_domain": "costco.com, amazon.com, walmart.com, target.com",
+    "pt_prodonly_pincode_based": "No",
+    "sos_zipcode_required": "No",
+    "pt_prodonly_sample_urls": "",
+    "sos_pages": 5,
+    "pt_prodonly_inputs_status": "Available \u2014 See Sheet Link Below"
+  }
+}

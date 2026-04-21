@@ -1,0 +1,56 @@
+{
+  "client_name": "(Internl)ABM - Nescafe",
+  "saved_at": "2026-03-31T07:40:27.631171",
+  "saved_by": "josh",
+  "status": "Submitted",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "(Internl)ABM - Nescafe",
+      "Priority Level": "High",
+      "Expected Completion": "2026-04-04",
+      "Target Market": "India"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Festive Sale Crawls"
+    },
+    "Festive Sale Crawls": {
+      "Crawl Type": "Products + Trends Based",
+      "Domains": "swiggy.com, blinkit.com, zeptonow.com",
+      "URL List": "Blinkit: Primary category: Coffee\u2028\n\nhttps://blinkit.com/dc/?collection_uuid=OTg3NjU0MzIxMjM0NTMzNTA%3D&collection_group_id=11618&sort=bestsellers&enable_auto_suggestions=false&should_disable_rails=false&hide_filters=false&oos_visibility=true&exclude_combos=false&disable_previous_buy_boosting=false&should_disable_listing=false&should_personalise=false&critical_entities_visibility=false\n\nZepto: Primary category: Coffee\n\nhttps://www.zepto.com/cn/tea-coffee-more/coffee/cid/d7e98d87-6850-4cf9-a37c-e4fa34ae302c/scid/0055bf0a-f578-4fa7-8b98-0c6e446bbe29\n\nInstamart: Primary category: Coffee\u2028\nSecondary category: Instant coffee\u2028https://www.swiggy.com/instamart/category-listing?categoryName=Tea%2C+Coffee+and+Milk+drinks&filterId=6903b0c295d8230001064cfb&filterName=Instant+Coffee&offset=0&showAgeConsent=false&storeId=1388112&taxonomyType=taxonomy+10\u2028\u2028Secondary category: Filter and grounded coffee\u2028https://www.swiggy.com/instamart/category-listing?categoryName=Tea%2C+Coffee+and+Milk+drinks&filterId=6903b0c295d8230001064cfc&filterName=Filter+%26+Ground+Coffee&offset=0&showAgeConsent=false&storeId=1388112&taxonomyType=taxonomy+10\n",
+      "Frequency Per Day": 1,
+      "Start Date": "2026-04-01",
+      "End Date": "2026-04-02"
+    },
+    "Final Alignment": {
+      "Client Core Objective": "Need to crawl these for the ABM pages for Nescafe and 'Coffee' categories",
+      "Expectations From Us": ""
+    },
+    "Comments & Notes": {
+      "Additional Comments": "Primary category for all the sites would be 'Coffee' \n\nSecondary categories are mentioned in the URL list. "
+    }
+  },
+  "session_state": {
+    "final_comments": "Primary category for all the sites would be 'Coffee' \n\nSecondary categories are mentioned in the URL list. ",
+    "festive_domains": [
+      "swiggy.com",
+      "blinkit.com",
+      "zeptonow.com"
+    ],
+    "festive_start": "2026-04-01",
+    "festive_type": "Products + Trends Based",
+    "festive_custom_domain": "",
+    "festive_end": "2026-04-02",
+    "form_priority": "High",
+    "festive_mode": "Same config for all domains",
+    "final_expectation": "",
+    "festive_freq": 1,
+    "final_objective": "Need to crawl these for the ABM pages for Nescafe and 'Coffee' categories",
+    "festive_pt_urls": "Blinkit: Primary category: Coffee\u2028\n\nhttps://blinkit.com/dc/?collection_uuid=OTg3NjU0MzIxMjM0NTMzNTA%3D&collection_group_id=11618&sort=bestsellers&enable_auto_suggestions=false&should_disable_rails=false&hide_filters=false&oos_visibility=true&exclude_combos=false&disable_previous_buy_boosting=false&should_disable_listing=false&should_personalise=false&critical_entities_visibility=false\n\nZepto: Primary category: Coffee\n\nhttps://www.zepto.com/cn/tea-coffee-more/coffee/cid/d7e98d87-6850-4cf9-a37c-e4fa34ae302c/scid/0055bf0a-f578-4fa7-8b98-0c6e446bbe29\n\nInstamart: Primary category: Coffee\u2028\nSecondary category: Instant coffee\u2028https://www.swiggy.com/instamart/category-listing?categoryName=Tea%2C+Coffee+and+Milk+drinks&filterId=6903b0c295d8230001064cfb&filterName=Instant+Coffee&offset=0&showAgeConsent=false&storeId=1388112&taxonomyType=taxonomy+10\u2028\u2028Secondary category: Filter and grounded coffee\u2028https://www.swiggy.com/instamart/category-listing?categoryName=Tea%2C+Coffee+and+Milk+drinks&filterId=6903b0c295d8230001064cfc&filterName=Filter+%26+Ground+Coffee&offset=0&showAgeConsent=false&storeId=1388112&taxonomyType=taxonomy+10\n",
+    "form_completion_date": "2026-04-04",
+    "form_modules": [
+      "Festive Sale Crawls"
+    ],
+    "form_client_name": "(Internl)ABM - Nescafe",
+    "form_target_market": "India"
+  }
+}
