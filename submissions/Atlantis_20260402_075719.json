@@ -1,0 +1,79 @@
+{
+  "client_name": "Atlantis",
+  "saved_at": "2026-04-02T07:57:19.867474",
+  "saved_by": "josh",
+  "status": "Submitted",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "Atlantis",
+      "Priority Level": "High",
+      "Expected Completion": "2026-04-06",
+      "Target Market": "India"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Products + Trends"
+    },
+    "Products + Trends": {
+      "Domains": "blinkit.com, amazon.in",
+      "Crawl Type": "Input-based (URL/Input driven)",
+      "Overall Frequency": "Daily (2x/day)",
+      "Products Crawl Needed": "Yes",
+      "Products Crawl Frequency": "Daily (2x/day)",
+      "Trends Crawl Frequency": "Daily (2x/day)",
+      "Sample Input URLs": "",
+      "Client Inputs Sheet Link": "https://docs.google.com/spreadsheets/d/1DFEO2GmgHdMfrRxyAWvH1j_yc8SXQ3zbjMuM8Riu87Q/edit?usp=sharing",
+      "Pincode Based": "Yes",
+      "Sample Pincode": "121006, 131001, 201306, 412106, 562106",
+      "Client Pincode List Link": "https://docs.google.com/spreadsheets/d/1DFEO2GmgHdMfrRxyAWvH1j_yc8SXQ3zbjMuM8Riu87Q/edit?gid=594164620#gid=594164620",
+      "Crawl Start Date": "2026-04-02",
+      "Crawl End Date": "2026-04-08",
+      "Expected Volume": "100",
+      "Screenshot Required": "No",
+      "Specific Fields": ""
+    },
+    "Final Alignment": {
+      "Client Core Objective": "Client wants to check the pincode data for Blinkit and Amazon.in\n\nKey needs(as per the call):\n- Daily (or higher frequency) price tracking\n- Monitoring of promotions, discounts, and offers\n- Stock availability tracking\n- Alerts for price changes and new listings\n- Dashboard/reporting for competitor benchmarking",
+      "Expectations From Us": ""
+    },
+    "Comments & Notes": {
+      "Additional Comments": ""
+    }
+  },
+  "session_state": {
+    "final_comments": "",
+    "pt_expected_volume": "100",
+    "pt_input_trend_freq": "Daily",
+    "pt_custom_domain": "",
+    "final_expectation": "",
+    "form_completion_date": "2026-04-06",
+    "form_modules": [
+      "Products + Trends"
+    ],
+    "pt_inputs_status": "Available \u2014 See Sheet Link Below",
+    "pt_input_trend_daily": 2,
+    "pt_inputs_sheet_link": "https://docs.google.com/spreadsheets/d/1DFEO2GmgHdMfrRxyAWvH1j_yc8SXQ3zbjMuM8Riu87Q/edit?usp=sharing",
+    "pt_overall_daily": 2,
+    "pt_crawl_type": "Input-based (URL/Input driven)",
+    "form_priority": "High",
+    "pt_pincode_list_link": "https://docs.google.com/spreadsheets/d/1DFEO2GmgHdMfrRxyAWvH1j_yc8SXQ3zbjMuM8Riu87Q/edit?gid=594164620#gid=594164620",
+    "pt_sample_pincode": "121006, 131001, 201306, 412106, 562106",
+    "form_target_market": "India",
+    "pt_sample_input_urls": "",
+    "final_objective": "Client wants to check the pincode data for Blinkit and Amazon.in\n\nKey needs(as per the call):\n- Daily (or higher frequency) price tracking\n- Monitoring of promotions, discounts, and offers\n- Stock availability tracking\n- Alerts for price changes and new listings\n- Dashboard/reporting for competitor benchmarking",
+    "pt_screenshot": "No",
+    "pt_input_prod_freq": "Daily",
+    "pt_specific_fields": "",
+    "pt_mode": "Same config for all domains",
+    "pt_input_prod_daily": 2,
+    "pt_crawl_end_date": "2026-04-08",
+    "pt_pincode_based": "Yes",
+    "form_client_name": "Atlantis",
+    "pt_overall_freq": "Daily",
+    "pt_crawl_start_date": "2026-04-02",
+    "pt_input_products_needed": "Yes",
+    "pt_domains": [
+      "blinkit.com",
+      "amazon.in"
+    ]
+  }
+}

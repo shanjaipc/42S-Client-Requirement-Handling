@@ -1,0 +1,77 @@
+{
+  "client_name": "Innovist",
+  "saved_at": "2026-03-31T12:05:50.835361",
+  "saved_by": "josh",
+  "status": "Submitted",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "Innovist",
+      "Priority Level": "High",
+      "Expected Completion": "2026-04-04",
+      "Target Market": "India"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Products + Trends"
+    },
+    "Products + Trends": {
+      "Domains": "amazon.now, flipkart.minutes,",
+      "Crawl Type": "Input-based (URL/Input driven)",
+      "Overall Frequency": "Hourly (24 times/day)",
+      "Products Crawl Needed": "Yes",
+      "Products Crawl Frequency": "Daily",
+      "Trends Crawl Frequency": "Hourly (24 times/day)",
+      "Trends Hourly Timings": "All",
+      "Sample Input URLs": "https://docs.google.com/spreadsheets/d/1Q_W0cP010X_ZmkIAepLodfHjggOj4gS8mXkENO4I6eY/edit?usp=sharing",
+      "Client Inputs Sheet Link": "https://docs.google.com/spreadsheets/d/1Q_W0cP010X_ZmkIAepLodfHjggOj4gS8mXkENO4I6eY/edit?usp=sharing",
+      "Pincode Based": "Yes",
+      "Sample Pincode": "560001, 560093, 560038, 560034",
+      "Client Pincode List Link": "",
+      "Crawl Start Date": "2026-04-01",
+      "Crawl End Date": "2026-04-03",
+      "Expected Volume": "200",
+      "Screenshot Required": "No",
+      "Specific Fields": ""
+    },
+    "Final Alignment": {
+      "Client Core Objective": "Data set for Amazon Now and FK minutes",
+      "Expectations From Us": ""
+    },
+    "Comments & Notes": {
+      "Additional Comments": "Hourly crawl for 24 hours. "
+    }
+  },
+  "session_state": {
+    "final_comments": "Hourly crawl for 24 hours. ",
+    "pt_expected_volume": "200",
+    "pt_input_trend_freq": "Hourly",
+    "pt_custom_domain": "amazon.now, flipkart.minutes,",
+    "final_expectation": "",
+    "pt_trends_hourly_timings": "All",
+    "form_completion_date": "2026-04-04",
+    "form_modules": [
+      "Products + Trends"
+    ],
+    "pt_inputs_status": "Available \u2014 See Sheet Link Below",
+    "pt_overall_hourly": 24,
+    "pt_inputs_sheet_link": "https://docs.google.com/spreadsheets/d/1Q_W0cP010X_ZmkIAepLodfHjggOj4gS8mXkENO4I6eY/edit?usp=sharing",
+    "pt_crawl_type": "Input-based (URL/Input driven)",
+    "pt_input_trend_hourly": 24,
+    "form_priority": "High",
+    "pt_pincode_list_link": "",
+    "pt_sample_pincode": "560001, 560093, 560038, 560034",
+    "form_target_market": "India",
+    "pt_sample_input_urls": "https://docs.google.com/spreadsheets/d/1Q_W0cP010X_ZmkIAepLodfHjggOj4gS8mXkENO4I6eY/edit?usp=sharing",
+    "final_objective": "Data set for Amazon Now and FK minutes",
+    "pt_screenshot": "No",
+    "pt_input_prod_freq": "Daily",
+    "pt_specific_fields": "",
+    "pt_input_prod_daily": 1,
+    "pt_crawl_end_date": "2026-04-03",
+    "pt_pincode_based": "Yes",
+    "form_client_name": "Innovist",
+    "pt_overall_freq": "Hourly",
+    "pt_crawl_start_date": "2026-04-01",
+    "pt_input_products_needed": "Yes",
+    "pt_domains": []
+  }
+}

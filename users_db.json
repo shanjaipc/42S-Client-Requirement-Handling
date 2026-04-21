@@ -47,5 +47,12 @@
     "hash": "57a80b117a6c6eddc40f06217acf5f4c1209f75316593b7e7bd22ebbc47ea4cc",
     "display_name": "Ravindran",
     "role": "viewer"
+  },
+  "viswanath": {
+    "salt": "cec6f65ade5e13291c9238f31ede0df80405fe1bc306de352bf35cecb48bff84",
+    "hash": "c14ed903733579f477f2322c2cacf22afd70fd88ba6c657ba7a4d21539b9bc2a",
+    "display_name": "Viswanath S R",
+    "role": "viewer",
+    "active": true
   }
 }

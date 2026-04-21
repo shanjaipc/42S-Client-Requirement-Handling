@@ -1,0 +1,77 @@
+{
+  "client_name": "Big muscles",
+  "saved_at": "2026-03-26T16:23:03.374531",
+  "saved_by": "josh",
+  "status": "Submitted",
+  "form_data": {
+    "Client Information": {
+      "Client Name": "Big muscles",
+      "Priority Level": "High",
+      "Expected Completion": "2026-03-28",
+      "Target Market": "India"
+    },
+    "Modules Selected": {
+      "Selected Modules": "Products + Trends"
+    },
+    "Products + Trends": {
+      "Domains": "zeptonow.com",
+      "Crawl Type": "Input-based (URL/Input driven)",
+      "Overall Frequency": "Daily (2x/day)",
+      "Products Crawl Needed": "Yes",
+      "Products Crawl Frequency": "Daily",
+      "Trends Crawl Frequency": "Daily (2x/day)",
+      "Sample Input URLs": "https://docs.google.com/spreadsheets/d/1IDPYVFiNn2KZQfEzM6mVFFgoUB-QchX52xClS-oYo9w/edit?usp=sharing",
+      "Client Inputs Sheet Link": "https://docs.google.com/spreadsheets/d/1IDPYVFiNn2KZQfEzM6mVFFgoUB-QchX52xClS-oYo9w/edit?usp=sharing",
+      "Pincode Based": "Yes",
+      "Sample Pincode": "110001, 560001, 400049",
+      "Client Pincode List Link": "",
+      "Crawl Start Date": "2026-03-26",
+      "Crawl End Date": "2026-03-28",
+      "Expected Volume": "100",
+      "Screenshot Required": "No",
+      "Specific Fields": ""
+    },
+    "Final Alignment": {
+      "Client Core Objective": "Check the data for data accuracy",
+      "Expectations From Us": ""
+    },
+    "Comments & Notes": {
+      "Additional Comments": "This can be a crawl for 2 days - twice a day"
+    }
+  },
+  "session_state": {
+    "final_comments": "This can be a crawl for 2 days - twice a day",
+    "pt_expected_volume": "100",
+    "pt_input_trend_freq": "Daily",
+    "pt_custom_domain": "",
+    "final_expectation": "",
+    "form_completion_date": "2026-03-28",
+    "form_modules": [
+      "Products + Trends"
+    ],
+    "pt_inputs_status": "Available \u2014 See Sheet Link Below",
+    "pt_input_trend_daily": 2,
+    "pt_inputs_sheet_link": "https://docs.google.com/spreadsheets/d/1IDPYVFiNn2KZQfEzM6mVFFgoUB-QchX52xClS-oYo9w/edit?usp=sharing",
+    "pt_overall_daily": 2,
+    "pt_crawl_type": "Input-based (URL/Input driven)",
+    "form_priority": "High",
+    "pt_pincode_list_link": "",
+    "pt_sample_pincode": "110001, 560001, 400049",
+    "form_target_market": "India",
+    "pt_sample_input_urls": "https://docs.google.com/spreadsheets/d/1IDPYVFiNn2KZQfEzM6mVFFgoUB-QchX52xClS-oYo9w/edit?usp=sharing",
+    "final_objective": "Check the data for data accuracy",
+    "pt_screenshot": "No",
+    "pt_input_prod_freq": "Daily",
+    "pt_specific_fields": "",
+    "pt_input_prod_daily": 1,
+    "pt_crawl_end_date": "2026-03-28",
+    "pt_pincode_based": "Yes",
+    "form_client_name": "Big muscles",
+    "pt_overall_freq": "Daily",
+    "pt_crawl_start_date": "2026-03-26",
+    "pt_input_products_needed": "Yes",
+    "pt_domains": [
+      "zeptonow.com"
+    ]
+  }
+}
