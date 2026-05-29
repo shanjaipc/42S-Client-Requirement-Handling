@@ -2,6 +2,10 @@ import streamlit as st  # type: ignore
 import streamlit.components.v1 as components  # type: ignore
 import csv
 import html as _html_mod
+import json
+import gspread  # type: ignore
+from google.oauth2.credentials import Credentials  # type: ignore
+from google.auth.transport.requests import Request  # type: ignore
 import os
 import pandas as pd  # type: ignore
 from datetime import date, datetime
@@ -19,6 +23,60 @@ from persistence import (
 
 LOGO_PATH = str(Path(__file__).parent.parent / "42slogo_top.png")
 SCREENSHOT_RATE_DEFAULT = 0.00044   # $/page — editable per site in the UI
+
+_GSHEET_ID       = "16FjUYGpZDdJWpib-u-EtyC8eEKBHMhvNFF0HZl6VMKc"
+_GSHEET_TAB      = "crawl_cost_rates"
+_OAUTH_TOKEN_PATH = Path(__file__).parent.parent / "oauth_token.json"
+
+
+def _get_gspread_client():
+    with open(_OAUTH_TOKEN_PATH) as f:
+        td = json.load(f)
+    creds = Credentials(
+        token=td.get("token"),
+        refresh_token=td["refresh_token"],
+        token_uri=td["token_uri"],
+        client_id=td["client_id"],
+        client_secret=td["client_secret"],
+        scopes=td["scopes"],
+    )
+    if not creds.valid:
+        creds.refresh(Request())
+        td["token"] = creds.token
+        with open(_OAUTH_TOKEN_PATH, "w") as f:
+            json.dump(td, f, indent=2)
+    return gspread.authorize(creds)
+
+
+@st.cache_data(ttl=300, show_spinner="Loading rates from Google Sheets…")
+def _load_rates_from_gsheet():
+    """Fetch crawl cost rates from the Google Sheet. Cached for 5 minutes."""
+    gc = _get_gspread_client()
+    ws = gc.open_by_key(_GSHEET_ID).worksheet(_GSHEET_TAB)
+    rows = ws.get_all_records()
+
+    platform_list, platform_display, rates = [], {}, {}
+    last_updated = ""
+    for row in rows:
+        d   = str(row.get("domain", "")).strip()
+        if not d:
+            continue
+        is_zip = str(row.get("zipcode", "false")).strip().lower() == "true"
+        key    = "with" if is_zip else "without"
+        if d not in rates:
+            platform_list.append(d)
+            platform_display[d] = str(row.get("display_name", d)).strip()
+            rates[d] = {}
+        rates[d][key] = {
+            "sku": float(row.get("sku_rate", 0)),
+            "cat": float(row.get("cat_rate", 0)),
+            "kw":  float(row.get("kw_rate",  0)),
+            "screenshot": float(row.get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)),
+        }
+        if not last_updated:
+            last_updated = str(row.get("last_updated", "")).strip()
+
+    return platform_list, platform_display, rates, last_updated
 
 
 def _fmt_cost(v, symbol="$"):
@@ -501,46 +559,18 @@ def render_cost_calculator():
                         st.rerun()
                 st.markdown("<hr style='margin:4px 0;border-color:#f1f5f9;'>", unsafe_allow_html=True)
 
-    # ── Load domain/rate config from CSV ──────────────────────────────────────
-    _RATES_CSV = Path("crawl_cost_rates.csv")
-
-    if not _RATES_CSV.exists():
-        st.error("crawl_cost_rates.csv not found. Please add it next to app.py.")
-        return
-
-    PLATFORM_LIST, PLATFORM_DISPLAY, RATES = [], {}, {}
-    _rates_last_updated = ""
+    # ── Load domain/rate config from Google Sheets ────────────────────────────
     try:
-        with open(_RATES_CSV, newline="") as _fh:
-            for _row in csv.DictReader(_fh):
-                _d   = _row["domain"].strip()
-                _zip = _row["zipcode"].strip().lower() == "true"
-                _key = "with" if _zip else "without"
-                if _d not in RATES:
-                    PLATFORM_LIST.append(_d)
-                    PLATFORM_DISPLAY[_d] = _row["display_name"].strip()
-                    RATES[_d] = {}
-                _sku = float(_row["sku_rate"])
-                _cat = float(_row["cat_rate"])
-                _kw  = float(_row["kw_rate"])
-                if _sku < 0 or _cat < 0 or _kw < 0:
-                    st.error(f"crawl_cost_rates.csv: negative rate for '{_d}' (zipcode={_row['zipcode']}). Rates must be ≥ 0.")
-                    return
-                RATES[_d][_key] = {"sku": _sku, "cat": _cat, "kw": _kw}
-                if not _rates_last_updated:
-                    _rates_last_updated = _row.get("last_updated", "").strip()
-    except KeyError as e:
-        st.error(f"crawl_cost_rates.csv is missing column: {e}. Expected columns: domain, display_name, zipcode, sku_rate, cat_rate, kw_rate, last_updated")
-        return
-    except ValueError as e:
-        st.error(f"crawl_cost_rates.csv contains an invalid number: {e}")
-        return
+        PLATFORM_LIST, PLATFORM_DISPLAY, RATES, _rates_last_updated = _load_rates_from_gsheet()
     except Exception as e:
-        st.error(f"Failed to load crawl_cost_rates.csv: {e}")
+        st.error(f"Failed to load rates from Google Sheets: {e}")
         return
 
     if not PLATFORM_LIST:
-        st.error("crawl_cost_rates.csv loaded successfully but contains no domains. Add at least one domain row.")
+        st.warning(
+            "No domains found in the Google Sheet. "
+            f"Add rows to the **'{_GSHEET_TAB}'** tab in the rates sheet."
+        )
         return
 
     # Remove stale selections
@@ -714,8 +744,9 @@ def render_cost_calculator():
                                         key=f"cc_ss_vol_{domain}")
                     _ci += 1
                     with _ecols[_ci]:
+                        _default_ss_rate = RATES.get(domain, {}).get("without", {}).get("screenshot", SCREENSHOT_RATE_DEFAULT)
                         st.number_input("📸 Rate ($/page)", min_value=0.0,
-                                        value=float(st.session_state.get(f"cc_{domain}_ss_rate", SCREENSHOT_RATE_DEFAULT)),
+                                        value=float(st.session_state.get(f"cc_{domain}_ss_rate", _default_ss_rate)),
                                         step=0.000001, format="%.6f",
                                         key=f"cc_{domain}_ss_rate")
 
@@ -826,7 +857,8 @@ def render_cost_calculator():
         zip_count = st.session_state.get(f"cc_zipcount_{domain}", 1)
         ss_mode   = st.session_state.get(f"cc_ss_mode_{domain}", "Without Screenshot")
         ss_vol    = st.session_state.get(f"cc_ss_vol_{domain}", 0)
-        ss_rate   = st.session_state.get(f"cc_{domain}_ss_rate", SCREENSHOT_RATE_DEFAULT)
+        _sheet_ss_rate = RATES.get(domain, {}).get("without", {}).get("screenshot", SCREENSHOT_RATE_DEFAULT)
+        ss_rate   = st.session_state.get(f"cc_{domain}_ss_rate", _sheet_ss_rate)
         for ct in selected_cts:
             a  = st.session_state.get(f"cc_{domain}_{ct}_a", 0)
             b  = st.session_state.get(f"cc_{domain}_{ct}_b", 0)
@@ -916,7 +948,7 @@ def render_cost_calculator():
 
     _period_label = {"As configured": "Total", "Monthly": "Monthly", "Annual": "Annual"}[_period]
     if grand_total_usd == 0:
-        st.info("All configured crawl types have a $0 rate. Check that the platforms and crawl types are correct, or update the rates in crawl_cost_rates.csv.")
+        st.info("All configured crawl types have a $0 rate. Check that the platforms and crawl types are correct, or update the rates in the Google Sheet.")
 
     # Correct period-adjusted grand total: sum each row's period-scaled cost
     _gt_period_val = sum(
@@ -996,7 +1028,7 @@ def render_cost_calculator():
             _ss_r        = domain_results[0].get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)
             _ss_period   = sum(r.get("screenshot_total", 0) * _fx * _period_factor(r["days"]) for r in domain_results)
             _ss_disp     = _fmt_c(_ss_period)
-            _ss_pages    = sum(r["volume_per_crawl"] * r["freq"] * r["days"] for r in domain_results)
+            _ss_pages    = sum(r.get("screenshot_total", 0) / _ss_r for r in domain_results) if _ss_r > 0 else 0
             rows_html += (
                 f'<tr style="background:#eff6ff;border-bottom:1px solid #dbeafe;">'
                 f'<td style="padding:9px 16px;font-size:0.85rem;color:#1d4ed8;font-weight:500;font-style:italic;">📸 Screenshots</td>'

@@ -2,3 +2,4 @@
 .42s_draft_*.json
 .42s_session.json
 cost_estimates/
+oauth_token.json
