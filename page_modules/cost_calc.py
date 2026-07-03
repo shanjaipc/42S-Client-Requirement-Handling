@@ -24,8 +24,8 @@ from persistence import (
 LOGO_PATH = str(Path(__file__).parent.parent / "42slogo_top.png")
 SCREENSHOT_RATE_DEFAULT = 0.00044   # $/page — editable per site in the UI
 
-_GSHEET_ID       = "16FjUYGpZDdJWpib-u-EtyC8eEKBHMhvNFF0HZl6VMKc"
-_GSHEET_TAB      = "crawl_cost_rates"
+_GSHEET_ID       = "1oLHi7Jn9JGP9SDSR5v6Cm02ph82fxO1QI5e7eqE0XyE"
+_GSHEET_TAB      = "Sheet1"
 _OAUTH_TOKEN_PATH = Path(__file__).parent.parent / "oauth_token.json"
 
 
@@ -48,9 +48,22 @@ def _get_gspread_client():
     return gspread.authorize(creds)
 
 
+def _safe_float(val, default=0.0):
+    try:
+        return float(str(val).strip()) if str(val).strip() else default
+    except (ValueError, TypeError):
+        return default
+
+
 @st.cache_data(ttl=300, show_spinner="Loading rates from Google Sheets…")
 def _load_rates_from_gsheet():
-    """Fetch crawl cost rates from the Google Sheet. Cached for 5 minutes."""
+    """Fetch crawl cost rates from the Google Sheet. Cached for 5 minutes.
+
+    Sheet columns (one row per domain):
+      Domain | Display Name | SKU (No Zip) | SKU (Zip) | Category (No Zip) |
+      Category (Zip) | Keyword (No Zip) | Keyword (Zip) |
+      Screenshot (No Zip) | Screenshot (Zip) | Updated On | Active
+    """
     gc = _get_gspread_client()
     ws = gc.open_by_key(_GSHEET_ID).worksheet(_GSHEET_TAB)
     rows = ws.get_all_records()
@@ -58,23 +71,32 @@ def _load_rates_from_gsheet():
     platform_list, platform_display, rates = [], {}, {}
     last_updated = ""
     for row in rows:
-        d   = str(row.get("domain", "")).strip()
+        d = str(row.get("Domain", "")).strip()
         if not d:
             continue
-        is_zip = str(row.get("zipcode", "false")).strip().lower() == "true"
-        key    = "with" if is_zip else "without"
-        if d not in rates:
-            platform_list.append(d)
-            platform_display[d] = str(row.get("display_name", d)).strip()
-            rates[d] = {}
-        rates[d][key] = {
-            "sku": float(row.get("sku_rate", 0)),
-            "cat": float(row.get("cat_rate", 0)),
-            "kw":  float(row.get("kw_rate",  0)),
-            "screenshot": float(row.get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)),
+        # Skip inactive rows
+        active = str(row.get("Active", "✅")).strip()
+        if active not in ("✅", "TRUE", "true", "1", "yes", "Yes"):
+            continue
+
+        platform_list.append(d)
+        platform_display[d] = str(row.get("Display Name", d)).strip()
+        rates[d] = {
+            "without": {
+                "sku":        _safe_float(row.get("SKU (No Zip)"),        0),
+                "cat":        _safe_float(row.get("Category (No Zip)"),   0),
+                "kw":         _safe_float(row.get("Keyword (No Zip)"),    0),
+                "screenshot": _safe_float(row.get("Screenshot (No Zip)"), SCREENSHOT_RATE_DEFAULT),
+            },
+            "with": {
+                "sku":        _safe_float(row.get("SKU (Zip)"),        0),
+                "cat":        _safe_float(row.get("Category (Zip)"),   0),
+                "kw":         _safe_float(row.get("Keyword (Zip)"),    0),
+                "screenshot": _safe_float(row.get("Screenshot (Zip)"), SCREENSHOT_RATE_DEFAULT),
+            },
         }
         if not last_updated:
-            last_updated = str(row.get("last_updated", "")).strip()
+            last_updated = str(row.get("Updated On", "")).strip()
 
     return platform_list, platform_display, rates, last_updated
 
@@ -625,59 +647,13 @@ def render_cost_calculator():
 
     # ── Step 1: Platform Selection ────────────────────────────────────────────
     section_header("🌐", "Step 1 — Select Platforms")
-    _input_mode = st.radio(
-        "Input method",
-        ["Select from list", "Paste comma-separated", "Upload CSV"],
-        horizontal=True,
-        key="cc_domain_input_mode",
-        label_visibility="collapsed",
+    selected_domains = st.multiselect(
+        "Choose platforms to include in this estimate",
+        options=PLATFORM_LIST,
+        format_func=lambda x: PLATFORM_DISPLAY.get(x, x),
+        key="cc_selected_domains",
+        placeholder="Select one or more platforms...",
     )
-
-    if _input_mode == "Select from list":
-        selected_domains = st.multiselect(
-            "Choose platforms to include in this estimate",
-            options=PLATFORM_LIST,
-            format_func=lambda x: PLATFORM_DISPLAY.get(x, x),
-            key="cc_selected_domains",
-            placeholder="Select one or more platforms...",
-        )
-
-    elif _input_mode == "Paste comma-separated":
-        _raw_paste = st.text_area(
-            "Paste domain names (comma-separated)",
-            placeholder="e.g. amazon.in, flipkart.com, blinkit.com",
-            key="cc_bulk_paste",
-            height=80,
-        )
-        _parsed_paste = [d.strip() for d in _raw_paste.split(",") if d.strip()]
-        _unknown_paste = [d for d in _parsed_paste if d not in PLATFORM_LIST]
-        if _unknown_paste:
-            st.warning(f"Not in rate config (skipped): {', '.join(_unknown_paste)}")
-        selected_domains = [d for d in _parsed_paste if d in PLATFORM_LIST]
-        st.session_state["cc_selected_domains"] = selected_domains
-
-    else:  # Upload CSV
-        import io as _io
-        _csv_file = st.file_uploader(
-            "Upload CSV (one domain per row, or comma-separated in first column)",
-            type=["csv"],
-            key="cc_bulk_csv",
-        )
-        if _csv_file:
-            _reader = csv.reader(_io.StringIO(_csv_file.getvalue().decode()))
-            _all_csv = []
-            for _row in _reader:
-                for _cell in _row:
-                    _all_csv.extend([c.strip() for c in _cell.split(",") if c.strip()])
-            _unknown_csv = [d for d in _all_csv if d not in PLATFORM_LIST]
-            if _unknown_csv:
-                st.warning(f"Not in rate config (skipped): {', '.join(_unknown_csv)}")
-            selected_domains = [d for d in _all_csv if d in PLATFORM_LIST]
-            st.session_state["cc_selected_domains"] = selected_domains
-            if selected_domains:
-                st.success(f"Loaded {len(selected_domains)} domain(s): {', '.join(PLATFORM_DISPLAY.get(d,d) for d in selected_domains)}")
-        else:
-            selected_domains = st.session_state.get("cc_selected_domains", [])
 
     if not selected_domains:
         st.markdown("""
@@ -1104,54 +1080,6 @@ def render_cost_calculator():
 
     elif len(_saved_scenarios) == 1:
         st.caption("Save one more scenario to enable side-by-side comparison.")
-
-    # ── Save Estimate ─────────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    section_header("💾", "Save Estimate")
-    _save_client = st.session_state.get("cc_client_name", "").strip()
-    _sv1, _sv2, _sv3 = st.columns([3, 1, 2])
-    with _sv1:
-        if not _save_client:
-            st.caption("Enter a client name in the field above to save this estimate.")
-        else:
-            st.markdown(
-                f'<div style="font-size:0.88rem;color:#475569;font-family:Inter,sans-serif;margin-top:6px;">'
-                f'Saving as: <b>{_html_mod.escape(_save_client)}</b>'
-                + (f' · Updating existing estimate' if st.session_state.get("_editing_cost_file") else '')
-                + '</div>',
-                unsafe_allow_html=True,
-            )
-    with _sv2:
-        if st.button("💾  Save", key="_cc_save_btn", width="stretch",
-                     type="primary", disabled=not _save_client):
-            _snap = {k: v for k, v in st.session_state.items()
-                     if isinstance(k, str) and k.startswith("cc_")
-                     and k not in ("cc_show_results", "cc_saved_scenarios",
-                                   "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
-                                   "cc_gen_top", "cc_currency", "cc_period", "cc_fx_rate")}
-            _fname = save_cost_estimate(
-                _save_client,
-                st.session_state.get("current_user", ""),
-                results,
-                grand_total_usd,
-                _snap,
-            )
-            st.success(f"Saved! ({_fname})")
-    with _sv3:
-        if st.session_state.get("_editing_cost_file"):
-            if st.button("✚ Save as New Copy", key="_cc_save_new_btn", width="stretch"):
-                st.session_state.pop("_editing_cost_file", None)
-                _snap = {k: v for k, v in st.session_state.items()
-                         if isinstance(k, str) and k.startswith("cc_")
-                         and k not in ("cc_show_results", "cc_saved_scenarios",
-                                       "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
-                                       "cc_gen_top", "cc_currency", "cc_period", "cc_fx_rate")}
-                _fname = save_cost_estimate(
-                    _save_client or "copy",
-                    st.session_state.get("current_user", ""),
-                    results, grand_total_usd, _snap,
-                )
-                st.success(f"Saved new copy: {_fname}")
 
     st.markdown("<br>", unsafe_allow_html=True)
     section_header("📥", "Download Estimate")

@@ -19,6 +19,7 @@ from typing import Optional
 from credentials import (
     verify_password, get_user, MAX_ATTEMPTS, LOCKOUT_SECONDS,
     add_user, set_password, set_role, set_active, list_users, save_users,
+    is_admin_user, verify_open_password,
 )
 from analytics import (
     log_event,
@@ -686,7 +687,7 @@ hr {
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────────────────────
 
-if "page"             not in st.session_state: st.session_state["page"]             = "dashboard"
+if "page"             not in st.session_state: st.session_state["page"]             = "main"
 if "authenticated"    not in st.session_state: st.session_state["authenticated"]    = False
 if "current_user"     not in st.session_state: st.session_state["current_user"]     = None
 if "display_name"     not in st.session_state: st.session_state["display_name"]     = None
@@ -1078,8 +1079,8 @@ def render_login():
     # ── Form (st.form enables Enter-to-submit) ────────────────────────────
     with st.form("login_form", clear_on_submit=False):
         username = st.text_input(
-            "Username",
-            placeholder="e.g. shanjai",
+            "Name",
+            placeholder="Enter your name",
             key="login_username",
             autocomplete="username",
         )
@@ -1113,9 +1114,17 @@ def render_login():
             st.rerun()
         elif not username or not password:
             st.warning("Please enter both username and password.")
-        elif verify_password(username, password):
-            user = get_user(username)
-            display_name = user["display_name"] if user else clean_user
+        elif (
+            is_admin_user(clean_user) and verify_password(username, password)
+        ) or (
+            not is_admin_user(clean_user) and verify_open_password(password)
+        ):
+            user = get_user(clean_user)
+            if user:
+                display_name = user["display_name"]
+            else:
+                # Unknown name — capitalise each word as the display name
+                display_name = username.strip().title()
             st.session_state["authenticated"]   = True
             st.session_state["current_user"]    = clean_user
             st.session_state["display_name"]    = display_name
@@ -1204,17 +1213,9 @@ with st.sidebar:
     _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
 
     _NAV_TOOLS = {
-        "dashboard": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-            "Dashboard",
-        ),
         "main": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
             "New Requirement Form",
-        ),
-        "sub_history": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
-            "Submission History",
         ),
         "feasibility": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
@@ -1224,20 +1225,12 @@ with st.sidebar:
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h2m4 0h3M7 12h2m4 0h3M7 16h2m4 0h3"/></svg>',
             "Cost Calculator",
         ),
+        "monthly_review": (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h2m4 0h2M8 18h2"/></svg>',
+            "Monthly Review",
+        ),
     }
     _NAV_REF = {
-        "req_flow": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 12h9"/><path d="M14.5 9l3 3-3 3"/></svg>',
-            "Requirement Flow",
-        ),
-        "ops_map": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-            "Ops Map",
-        ),
-        "poc_guide": (
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
-            "Task POC Guide",
-        ),
         "ext_tools": (
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
             "External Tools",
@@ -1252,10 +1245,6 @@ with st.sidebar:
             "analytics": (
                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M7 20V12M12 20V5M17 20v-8"/></svg>',
                 "Analytics Dashboard",
-            ),
-            "rate_mgr": (
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
-                "Rate Manager",
             ),
             "user_mgmt": (
                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>',
@@ -1621,30 +1610,18 @@ else:
             page,
         )
         st.session_state["analytics_last_page"] = page
-    if page == "dashboard":
-        from page_modules.dashboard import render_dashboard
-        render_dashboard()
-    elif page == "main":
+    if page == "main":
         from page_modules.main_form import render_main_form
         render_main_form()
     elif page == "feasibility":
         from page_modules.feasibility import render_feasibility
         render_feasibility()
-    elif page == "req_flow":
-        from page_modules.req_flow import render_req_flow
-        render_req_flow()
-    elif page == "ops_map":
-        from page_modules.ops_map import render_ops_map
-        render_ops_map()
-    elif page == "poc_guide":
-        from page_modules.poc_guide import render_poc_guide
-        render_poc_guide()
     elif page == "cost_calc":
         from page_modules.cost_calc import render_cost_calculator
         render_cost_calculator()
-    elif page == "sub_history":
-        from page_modules.sub_history import render_submission_history
-        render_submission_history()
+    elif page == "monthly_review":
+        from page_modules.monthly_review import render_monthly_review
+        render_monthly_review()
     elif page == "user_mgmt":
         _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
         if _role == "admin":
@@ -1654,14 +1631,6 @@ else:
             st.error("Access denied. This page is restricted to administrators.")
             st.session_state["page"] = "main"
             st.rerun()
-    elif page == "rate_mgr":
-        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
-        if _role == "admin":
-            from page_modules.rate_mgr import render_rate_manager
-            render_rate_manager()
-        else:
-            st.error("Access denied. This page is restricted to administrators.")
-            st.session_state["page"] = "main"
             st.rerun()
     elif page == "analytics":
         _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")

@@ -540,34 +540,6 @@ def render_main_form():
 
     _form_username = st.session_state.get("current_user", "")
 
-    # ── Auto-draft restore prompt ──────────────────────────────────────────
-    _draft = _load_draft(_form_username)
-    if _draft and not st.session_state.get("_draft_dismissed") and not st.session_state.get("_editing_submission_file"):
-        _draft_time = _draft.get("saved_at", "")[:16].replace("T", " ")
-        st.markdown(
-            f'<div style="background:#fffbeb;border:1px solid #f59e0b;border-left:4px solid #f59e0b;'
-            f'border-radius:8px;padding:12px 16px;margin-bottom:12px;font-family:\'Inter\',sans-serif;">'
-            f'<span style="font-size:0.88rem;font-weight:700;color:#92400e;">📋 Unsaved draft found</span>'
-            f'<span style="font-size:0.82rem;color:#78350f;margin-left:8px;">Last saved {_h(_draft_time)}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        _dc1, _dc2, _ = st.columns([1, 1, 4])
-        with _dc1:
-            if st.button("Resume Draft", key="_resume_draft_btn"):
-                _ISO_DATE_RE2 = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-                for k, v in _draft.get("session_state", {}).items():
-                    if isinstance(v, str) and _ISO_DATE_RE2.match(v):
-                        try: v = date.fromisoformat(v)
-                        except ValueError: pass
-                    st.session_state[k] = v
-                st.session_state["_draft_dismissed"] = True
-                st.rerun()
-        with _dc2:
-            if st.button("Discard Draft", key="_discard_draft_btn"):
-                _clear_draft(_form_username)
-                st.session_state["_draft_dismissed"] = True
-                st.rerun()
 
     # ── Load Template ─────────────────────────────────────────────────────────
     _tpls = _load_form_templates()
@@ -594,36 +566,6 @@ def render_main_form():
                 if st.button("🗑️  Delete Template", key="_tpl_del_btn"):
                     _delete_form_template(_tpl_choice)
                     st.rerun()
-
-    # ── Load Previous Submission ───────────────────────────────────────────
-    _saved = list_submissions()
-    if _saved:
-        with st.expander("📂  Load a previous submission", expanded=False):
-            _options = {
-                f"{s['client_name']}  ·  {s['saved_at'][:16].replace('T', ' ')}  (by {s['saved_by']})": s["filename"]
-                for s in _saved
-            }
-            _chosen_label = st.selectbox(
-                "Select submission to load",
-                list(_options.keys()),
-                key="_load_submission_select",
-                label_visibility="collapsed",
-            )
-            btn_col1, _ = st.columns([1, 3])
-            with btn_col1:
-                if st.button("⬆️  Load & Edit", key="_load_submission_btn"):
-                    load_submission(_options[_chosen_label])
-
-    # If editing a loaded submission, show a banner + allow starting fresh
-    if st.session_state.get("_editing_submission_file"):
-        info_col, btn_col = st.columns([4, 1])
-        with btn_col:
-            if st.button("✚  New Form", key="_new_form_btn", width="stretch"):
-                st.session_state["_editing_submission_file"] = None
-                for k in list(st.session_state.keys()):
-                    if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES):
-                        del st.session_state[k]
-                st.rerun()
 
     left, right = st.columns([2, 1], gap="large")
     form_data = {}
@@ -666,10 +608,6 @@ def render_main_form():
             "Expected Completion":    str(completion_date),
             "Target Market":          expected_market,
         }
-
-        # Auto-save draft whenever client name is present
-        if client_name:
-            _save_draft(_form_username, form_data)
 
         validate_required(client_name)
 
@@ -799,25 +737,6 @@ def render_main_form():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ── Save as Template ──────────────────────────────────────────────────
-        with st.expander("💾  Save current form as a template", expanded=False):
-            _tpl_name_input = st.text_input(
-                "Template name",
-                placeholder="e.g. Standard QCommerce Setup",
-                key="_save_tpl_name",
-                label_visibility="collapsed",
-            )
-            if st.button("💾  Save Template", key="_save_tpl_btn"):
-                if not _tpl_name_input.strip():
-                    st.error("Give the template a name.")
-                else:
-                    _tpl_snapshot = {
-                        k: v for k, v in st.session_state.items()
-                        if isinstance(k, str) and k.startswith(_FORM_KEY_PREFIXES)
-                    }
-                    _save_form_template(_tpl_name_input.strip(), _tpl_snapshot)
-                    st.success(f"Template '{_tpl_name_input.strip()}' saved.")
-
         st.markdown("<br>", unsafe_allow_html=True)
 
         # PDF Generation + Download (single button)
@@ -838,12 +757,6 @@ def render_main_form():
             except Exception as e:
                 st.error(f"PDF generation failed — please try again or contact your admin. ({type(e).__name__})")
                 st.stop()
-            try:
-                save_submission(form_data, client_name, st.session_state.get("current_user", ""))
-                _clear_draft(_form_username)
-                st.session_state["_draft_dismissed"] = False
-            except Exception:
-                pass
             log_event(EVENT_DOWNLOAD_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main")
             celebrate(message="Downloading PDF…", sub=f"{_h(client_name)} Requirement Form is downloading.")
             _pdf_b64  = base64.b64encode(_pdf_bytes).decode()

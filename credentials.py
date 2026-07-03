@@ -54,8 +54,8 @@ USERS: Dict[str, Any] = {
         "role": "admin",
     },
     "srinivas": {
-        "salt": "1b2e89bba60567c27aba7850ebd0fb363c90ac8da72dcf2d19a56f0b60892c37",
-        "hash": "c8ddf2d6b81aa63f5d39aaec4eb46e6c47ba27b30e2d0aca4e4ca96a796cffd7",
+        "salt": "7072ad91f3370c819233577a615dcb323954e0b1c847b14829098026cf275b3c",
+        "hash": "959e46ce88536c1ffd5d438b89ed21728b5f7694e9b9d79ed73bbf16ea6991fc",
         "display_name": "Srinivas",
         "role": "viewer",
     },
@@ -66,32 +66,32 @@ USERS: Dict[str, Any] = {
         "role": "admin",
     },
     "pgupta": {
-        "salt": "08d03b6766d728b9f5253bc95b3cb3d0522eeb5a755ea0acf62e36cfa4ed9892",
-        "hash": "5be10faf07a7713275ffc9aa182b7c5753e9445373c28bf4f8e31ff5206f81ed",
+        "salt": "e243d6c79c7cc303496e51429c82a69d714bd88f711cb8bb521f4394ecf53b52",
+        "hash": "f607f50f5fbfd7335b9cb133b191a60bd26131ffa45058c34b32404ad1e622d7",
         "display_name": "Pgupta",
         "role": "viewer",
     },
     "josh": {
-        "salt": "47bb40a92cf98a9f744f2e060c6a572922c80d60ed8344df693ed4092abdd5c1",
-        "hash": "35d5015c713c12dedc751d42f57d8799cc88ad6c72b0c75caf7d18f63747a121",
+        "salt": "a38ed120166913648742e52511c1635af828b61e35b41ccd3e87cc79b6b9eca2",
+        "hash": "14c950ab748fa3fba25f282b1286ce0c1141c0b5e30dd48f226b4defc2d5bf93",
         "display_name": "Josh",
         "role": "viewer",
     },
     "ankit": {
-        "salt": "e5998a0320d7460ffb2bd14a6b6f08bcd9d6ec36ea565c5905c4955d9ee83237",
-        "hash": "afbcfbf54f52fc8559f6b29a6b58d872b5177c15d37bfa01c906a683b9994bc5",
+        "salt": "58c3e59d612c70d7782595810ea94c63b8bc90a5d57fefd478a698aadedad742",
+        "hash": "3787f5fa611ba45ed95dbaa6f4c05bd9253bae577d743bdb29e23acba51ba73a",
         "display_name": "Ankit",
         "role": "viewer",
     },
     "arunashok": {
-        "salt": "2eb6ea09c3fe52fa96a87043772a8ec4bb1c2787b282df180c4af155f42f9fb0",
-        "hash": "de7902c109809313ccde4e766a527f189d7bdac6f781b73233d06dfd0a150296",
+        "salt": "ed103b6e15d63093947bcd225a89537f39e6253ebfc689b4414b73f83473f025",
+        "hash": "ead2a9d9ad7b5c3f4359d9f1bf2611dd3ac7f38c46668139bcae05add7242e05",
         "display_name": "Arunashok",
         "role": "viewer",
     },
     "ravindran": {
-        "salt": "87c2144ee6b2fbfefdab5cdc24d0ccdf72a8f8fc081419b9f395e35ddb0e907b",
-        "hash": "57a80b117a6c6eddc40f06217acf5f4c1209f75316593b7e7bd22ebbc47ea4cc",
+        "salt": "55e059e1cc947789a2ed18badcd438f15fb808e11a9adff5203dab57001bce74",
+        "hash": "7ad3b62c3f0a5209c49d4175af5822729db8d8f65d87a72acd0787d6e5fbb876",
         "display_name": "Ravindran",
         "role": "viewer",
     },
@@ -110,6 +110,27 @@ if _USERS_DB.exists():
 MAX_ATTEMPTS = 5
 # Lockout duration in seconds
 LOCKOUT_SECONDS = 300  # 5 minutes
+
+# ── Open login — any name + this shared password is accepted for non-admin access ──
+_OPEN_SALT = "a3f8c2d1e0b7946f5234089a1bc6e7d85f3219c047a8d6e23051f79b4c8a0de2"
+_OPEN_HASH = "e6ca1a00294d8bbba922e555671d283aef9500751166b935dc676ccfdb69715b"
+
+
+def is_admin_user(username: str) -> bool:
+    """Return True if the username belongs to an admin account."""
+    user = USERS.get(username.strip().lower())
+    return user is not None and user.get("role") == "admin"
+
+
+def verify_open_password(password: str) -> bool:
+    """Check password against the shared non-admin password hash."""
+    candidate = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        _OPEN_SALT.encode("utf-8"),
+        260_000,
+    ).hex()
+    return secrets.compare_digest(candidate, _OPEN_HASH)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
