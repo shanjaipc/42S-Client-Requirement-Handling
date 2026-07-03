@@ -115,113 +115,74 @@ def _fmt_cost(v, symbol="$"):
 
 
 def _generate_cost_pdf(results, grand_total, selected_domains, platform_display, rates_last_updated="",
-                       fx=1.0, symbol="$", period="As configured", period_factor_fn=None, pdf_note=""):
-    """Invoice-style PDF cost estimate."""
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable, KeepTogether, Flowable  # type: ignore
+                       fx=1.0, symbol="$", period="As configured", period_factor_fn=None, pdf_note="",
+                       client_name=""):
+    """Spreadsheet-style black & white PDF cost estimate."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether  # type: ignore
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
     from reportlab.lib import pagesizes  # type: ignore
     from reportlab.lib.units import inch  # type: ignore
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT  # type: ignore
-    from reportlab.lib.colors import HexColor, white, black  # type: ignore
+    from reportlab.lib.colors import white, black, HexColor  # type: ignore
 
     # ── Page setup ────────────────────────────────────────────────────────────
-    L_MARGIN = 0.65 * inch
-    R_MARGIN = 0.65 * inch
+    LM = RM = 0.60 * inch
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=pagesizes.A4,
-        topMargin=0.5 * inch, bottomMargin=0.55 * inch,
-        leftMargin=L_MARGIN, rightMargin=R_MARGIN,
-    )
-    PAGE_W = pagesizes.A4[0] - L_MARGIN - R_MARGIN  # ≈ 6.87"
+    doc = SimpleDocTemplate(buffer, pagesize=pagesizes.A4,
+                            topMargin=0.45*inch, bottomMargin=0.50*inch,
+                            leftMargin=LM, rightMargin=RM)
+    PW = pagesizes.A4[0] - LM - RM          # usable width ≈ 6.9"
 
-    # ── Colour palette (minimal — one accent, neutral grays) ─────────────────
-    C_INK      = HexColor("#111827")   # primary text
-    C_SUBINK   = HexColor("#374151")   # secondary text
-    C_MUTED    = HexColor("#6b7280")   # labels / captions
-    C_ACCENT   = HexColor("#1d4ed8")   # single blue accent
-    C_RULE     = HexColor("#e5e7eb")   # subtle borders
-    C_THHDR    = HexColor("#1e293b")   # table column header bg (dark slate)
-    C_ROWEVEN  = white
-    C_ROWODD   = HexColor("#f9fafb")   # alternating row tint
-    C_SUBTOT   = HexColor("#f3f4f6")   # subtotal row
-    C_AMOUNT   = HexColor("#111827")
-    C_AMOUNT_B = HexColor("#374151")
+    # ── Palette ───────────────────────────────────────────────────────────────
+    C_BLACK  = black
+    C_WHITE  = white
+    C_DARK   = HexColor("#111111")           # near-black text
+    C_GRAY   = HexColor("#555555")           # secondary text
+    C_LGRAY  = HexColor("#f0f0f0")           # light row tint / subtotal bg
+    C_MGRAY  = HexColor("#dddddd")           # border color
+    C_THDR   = black                         # table header bg
+    C_SHDR   = HexColor("#333333")           # platform section header bg
 
     # ── Styles ────────────────────────────────────────────────────────────────
     S = getSampleStyleSheet()
     def _ps(name, **kw):
         return ParagraphStyle(name, parent=S["Normal"], **kw)
 
-    # Header styles
-    inv_title_s    = _ps("IT",  fontSize=16, fontName="Helvetica-Bold",
-                          textColor=white, leading=21, alignment=TA_LEFT)
-    inv_sub_s      = _ps("IS",  fontSize=7.5, textColor=HexColor("#94a3b8"),
-                          leading=11, alignment=TA_LEFT)
-    inv_meta_lbl_s = _ps("IML", fontSize=6.5, fontName="Helvetica-Bold",
-                          textColor=HexColor("#94a3b8"), leading=9,
-                          alignment=TA_RIGHT)
-    inv_meta_val_s = _ps("IMV", fontSize=8.5, textColor=white,
-                          leading=12, alignment=TA_RIGHT)
-
-    # Section label (platform name above its table)
-    plat_s      = _ps("PL", fontSize=10, fontName="Helvetica-Bold",
-                      textColor=C_INK, leading=14, spaceBefore=4)
-    plat_sub_s  = _ps("PS", fontSize=8.5, textColor=C_MUTED, leading=12)
-
-    # Column headers
-    th_l_s      = _ps("THL", fontSize=8, fontName="Helvetica-Bold",
-                      textColor=white, leading=11)
-    th_c_s      = _ps("THC", fontSize=8, fontName="Helvetica-Bold",
-                      textColor=white, leading=11, alignment=TA_CENTER)
-    th_r_s      = _ps("THR", fontSize=8, fontName="Helvetica-Bold",
-                      textColor=white, leading=11, alignment=TA_RIGHT)
-
-    # Table body
-    td_s        = _ps("TD",  fontSize=9,   textColor=C_INK,    leading=12)
-    tdc_s       = _ps("TDC", fontSize=9,   textColor=C_SUBINK, leading=12, alignment=TA_CENTER)
-    tdr_s       = _ps("TDR", fontSize=9,   fontName="Helvetica-Bold",
-                      textColor=C_AMOUNT, leading=12, alignment=TA_RIGHT)
-    cpm_s       = _ps("CPM", fontSize=8.5, textColor=C_MUTED,  leading=12, alignment=TA_RIGHT)
-
-    # Subtotal row
-    sub_lbl_s   = _ps("SBL", fontSize=9, fontName="Helvetica-Bold",
-                      textColor=C_SUBINK, leading=12)
-    sub_val_s   = _ps("SBV", fontSize=9, fontName="Helvetica-Bold",
-                      textColor=C_INK, leading=12, alignment=TA_RIGHT)
-
-    # Screenshot row
-    C_SS = HexColor("#0369a1")   # steel blue for screenshot line
-    ss_lbl_s    = _ps("SSL", fontSize=8.5, fontName="Helvetica-Oblique",
-                      textColor=C_SS, leading=12)
-    ss_val_s    = _ps("SSV", fontSize=8.5, fontName="Helvetica-Bold",
-                      textColor=C_SS, leading=12, alignment=TA_RIGHT)
-    ss_cpm_s    = _ps("SSC", fontSize=8, textColor=C_SS, leading=12, alignment=TA_RIGHT)
-
-    # Summary / grand total
-    sum_th_s    = _ps("STH", fontSize=8.5, fontName="Helvetica-Bold",
-                      textColor=white, leading=12)
-    sum_td_s    = _ps("STD", fontSize=9.5, textColor=C_INK, leading=13)
-    sum_val_s   = _ps("STV", fontSize=9.5, fontName="Helvetica-Bold",
-                      textColor=C_INK, leading=13, alignment=TA_RIGHT)
-    gt_lbl_s    = _ps("GTL", fontSize=11.5, fontName="Helvetica-Bold",
-                      textColor=white, leading=16)
-    gt_val_s    = _ps("GTV", fontSize=14, fontName="Helvetica-Bold",
-                      textColor=white, leading=18, alignment=TA_RIGHT)
-    foot_s      = _ps("FT",  fontSize=7.5, textColor=C_MUTED,
-                      alignment=TA_CENTER, leading=11)
+    title_s   = _ps("TI", fontSize=18, fontName="Helvetica-Bold", textColor=C_DARK,   leading=22)
+    sub_s     = _ps("SU", fontSize=8,  fontName="Helvetica",      textColor=C_GRAY,   leading=11)
+    meta_lbl  = _ps("ML", fontSize=7,  fontName="Helvetica-Bold", textColor=C_GRAY,   leading=10)
+    meta_val  = _ps("MV", fontSize=8,  fontName="Helvetica-Bold", textColor=C_DARK,   leading=11)
+    th_l      = _ps("HL", fontSize=8,  fontName="Helvetica-Bold", textColor=C_WHITE,  leading=10)
+    th_c      = _ps("HC", fontSize=8,  fontName="Helvetica-Bold", textColor=C_WHITE,  leading=10, alignment=TA_CENTER)
+    th_r      = _ps("HR", fontSize=8,  fontName="Helvetica-Bold", textColor=C_WHITE,  leading=10, alignment=TA_RIGHT)
+    td_l      = _ps("DL", fontSize=8.5, textColor=C_DARK,  leading=11)
+    td_c      = _ps("DC", fontSize=8.5, textColor=C_DARK,  leading=11, alignment=TA_CENTER)
+    td_r      = _ps("DR", fontSize=8.5, textColor=C_DARK,  leading=11, alignment=TA_RIGHT)
+    td_rb     = _ps("DB", fontSize=8.5, fontName="Helvetica-Bold", textColor=C_DARK, leading=11, alignment=TA_RIGHT)
+    td_muted  = _ps("DM", fontSize=8,  textColor=C_GRAY,  leading=11, alignment=TA_RIGHT)
+    sub_lbl   = _ps("SL", fontSize=8.5, fontName="Helvetica-Bold", textColor=C_DARK,  leading=11)
+    sub_val   = _ps("SV", fontSize=8.5, fontName="Helvetica-Bold", textColor=C_DARK,  leading=11, alignment=TA_RIGHT)
+    plat_hdr  = _ps("PH", fontSize=9.5, fontName="Helvetica-Bold", textColor=C_WHITE, leading=12)
+    plat_tot  = _ps("PT", fontSize=9.5, fontName="Helvetica-Bold", textColor=C_WHITE, leading=12, alignment=TA_RIGHT)
+    sum_hdr_l = _ps("SHL", fontSize=8.5, fontName="Helvetica-Bold", textColor=C_WHITE, leading=11)
+    sum_hdr_r = _ps("SHR", fontSize=8.5, fontName="Helvetica-Bold", textColor=C_WHITE, leading=11, alignment=TA_RIGHT)
+    sum_td_l  = _ps("SDL", fontSize=9,   textColor=C_DARK,  leading=12)
+    sum_td_r  = _ps("SDR", fontSize=9,   fontName="Helvetica-Bold", textColor=C_DARK, leading=12, alignment=TA_RIGHT)
+    gt_lbl    = _ps("GTL", fontSize=10,  fontName="Helvetica-Bold", textColor=C_WHITE, leading=13)
+    gt_val    = _ps("GTV", fontSize=12,  fontName="Helvetica-Bold", textColor=C_WHITE, leading=15, alignment=TA_RIGHT)
+    foot_s    = _ps("FT",  fontSize=7,   textColor=C_GRAY, leading=10, alignment=TA_CENTER)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _pf(usd, days=None):
         pf = period_factor_fn(days) if (period_factor_fn and days is not None) else 1.0
         v  = usd * fx * pf
-        if v == 0:      return f"{symbol}0.00"
-        if v < 0.0001:  return f"{symbol}{v:.6f}"
-        if v < 1:       return f"{symbol}{v:.4f}"
-        if v < 10000:   return f"{symbol}{v:,.2f}"
-        return          f"{symbol}{v:,.0f}"
+        if v == 0:     return f"{symbol}0.00"
+        if v < 0.0001: return f"{symbol}{v:.6f}"
+        if v < 1:      return f"{symbol}{v:.4f}"
+        if v < 10000:  return f"{symbol}{v:,.2f}"
+        return         f"{symbol}{v:,.0f}"
 
-    def _cpm_str(cost_per_crawl, volume):
+    def _cpm(cost_per_crawl, volume):
         if not volume: return "—"
         v = (cost_per_crawl / volume) * 1000 * fx
         if v == 0:    return f"{symbol}0.00"
@@ -232,285 +193,178 @@ def _generate_cost_pdf(results, grand_total, selected_domains, platform_display,
     _period_lbl = {"As configured": "Total", "Monthly": "Monthly", "Annual": "Annual"}.get(period, "Total")
     _gt_avg_days = (sum(r["total_cost"] * r["days"] for r in results) / grand_total) if grand_total else 30
 
+    def _bordered(style_extra=None):
+        base = [
+            ("BOX",         (0,0),(-1,-1), 0.6, C_DARK),
+            ("INNERGRID",   (0,0),(-1,-1), 0.4, C_MGRAY),
+            ("VALIGN",      (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",  (0,0),(-1,-1), 5),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 5),
+            ("LEFTPADDING", (0,0),(-1,-1), 7),
+            ("RIGHTPADDING",(0,0),(-1,-1), 7),
+        ]
+        if style_extra:
+            base += style_extra
+        return TableStyle(base)
+
     el = []
 
-    # ─── Custom canvas-drawn Flowables ────────────────────────────────────────
-    _logo_path_ref = LOGO_PATH
-    _inch = inch
+    # ── Header block ─────────────────────────────────────────────────────────
+    # Logo cell
+    logo_el = []
+    if os.path.exists(LOGO_PATH):
+        try:
+            logo_el.append(Image(LOGO_PATH, width=0.55*inch, height=0.45*inch))
+        except Exception:
+            pass
+    logo_cell = logo_el or [Paragraph("", sub_s)]
 
-    class _HeaderFlowable(Flowable):
-        def __init__(self, logo_path, meta_items, pw):
-            super().__init__()
-            self.logo_path  = logo_path
-            self.meta_items = meta_items
-            self.width  = pw
-            self.height = 1.00 * _inch
+    # Title cell
+    title_cell = [
+        Paragraph("Cost Estimate", title_s),
+        Spacer(1, 3),
+        Paragraph("42Signals · Analytics Platform", sub_s),
+    ]
 
-        def draw(self):
-            c, w, h = self.canv, self.width, self.height
-
-            # ── White background (clean page)
-            c.setFillColorRGB(1.0, 1.0, 1.0)
-            c.rect(0, 0, w, h, fill=1, stroke=0)
-
-            # ── Logo (left-aligned, vertically centred)
-            LP = 0.80 * _inch
-            LW = 0.52 * _inch
-            LH = LW * (0.48 / 0.60)
-            try:
-                if os.path.exists(self.logo_path):
-                    c.drawImage(self.logo_path, (LP - LW) / 2, (h - LH) / 2,
-                                width=LW, height=LH, mask='auto')
-            except Exception:
-                pass
-
-            # ── Thin vertical rules (column dividers)
-            c.setStrokeColorRGB(0.898, 0.910, 0.922)   # #e5e7eb
-            c.setLineWidth(0.5)
-            META_W = 1.65 * _inch
-            c.line(LP,       h * 0.14, LP,       h * 0.86)
-            c.line(w - META_W, h * 0.14, w - META_W, h * 0.86)
-
-            # ── Title block (middle column)
-            TX = LP + 16
-            c.setFont("Helvetica-Bold", 22)
-            c.setFillColorRGB(0.067, 0.098, 0.153)     # #111827
-            c.drawString(TX, h * 0.57, "Cost Estimate")
-            c.setFont("Helvetica", 8)
-            c.setFillColorRGB(0.420, 0.447, 0.502)     # #6b7280
-            c.drawString(TX, h * 0.32, "42Signals  \u00b7  Analytics Platform")
-
-            # ── Meta (right column): label right-aligned | value left-aligned
-            MX  = w - META_W + 14
-            n   = len(self.meta_items)
-            RH  = (h * 0.72) / max(n, 1)
-            LBX = MX + META_W * 0.38           # label right-edge
-            VLX = LBX + 7                      # value left-edge
-            for i, (lbl, val) in enumerate(self.meta_items):
-                ry = h * 0.84 - (i + 0.55) * RH
-                c.setFont("Helvetica", 6.5)
-                c.setFillColorRGB(0.420, 0.447, 0.502)
-                c.drawRightString(LBX, ry, lbl.upper())
-                c.setFont("Helvetica-Bold", 8.5)
-                c.setFillColorRGB(0.067, 0.098, 0.153)
-                c.drawString(VLX, ry, val)
-
-            # ── Single blue accent line at bottom (the only colour element)
-            c.setFillColorRGB(0.114, 0.306, 0.847)     # #1d4ed8
-            c.rect(0, 0, w, 2.5, fill=1, stroke=0)
-
-    class _PlatformBannerFlowable(Flowable):
-        def __init__(self, display_name, domain, total_str, pw):
-            super().__init__()
-            self.display_name = display_name
-            self.domain       = domain
-            self.total_str    = total_str
-            self.width  = pw
-            self.height = 0.36 * _inch
-
-        def draw(self):
-            c, w, h = self.canv, self.width, self.height
-
-            # ── Very light gray background
-            c.setFillColorRGB(0.973, 0.976, 0.980)     # #f8f9fa
-            c.rect(0, 0, w, h, fill=1, stroke=0)
-
-            # ── 3 pt blue left accent bar (only decoration)
-            c.setFillColorRGB(0.114, 0.306, 0.847)     # #1d4ed8
-            c.rect(0, 0, 3, h, fill=1, stroke=0)
-
-            # ── Bottom border (connects to table header below)
-            c.setStrokeColorRGB(0.898, 0.910, 0.922)   # #e5e7eb
-            c.setLineWidth(0.4)
-            c.line(0, 0, w, 0)
-
-            # ── Platform name + domain
-            _TY = h / 2 - 10 * 0.36               # visual centre for 10pt text
-            c.setFont("Helvetica-Bold", 10)
-            c.setFillColorRGB(0.067, 0.098, 0.153) # #111827
-            c.drawString(12, _TY, self.display_name)
-            nw = c.stringWidth(self.display_name, "Helvetica-Bold", 10)
-            c.setFont("Helvetica", 8)
-            c.setFillColorRGB(0.420, 0.447, 0.502) # #6b7280
-            c.drawString(12 + nw + 6, _TY, f"({self.domain})")
-
-            # ── Platform Total (right-aligned, dark text)
-            tv  = self.total_str
-            tvw = c.stringWidth(tv, "Helvetica-Bold", 9.5)
-            GAP = 5
-            vx  = w - 12
-            lx  = vx - tvw - GAP
-            c.setFont("Helvetica", 7)
-            c.setFillColorRGB(0.420, 0.447, 0.502)
-            c.drawRightString(lx, _TY, "Platform Total:")
-            c.setFont("Helvetica-Bold", 9.5)
-            c.setFillColorRGB(0.067, 0.098, 0.153)
-            c.drawRightString(vx, _TY, tv)
-
-    class _GrandTotalFlowable(Flowable):
-        def __init__(self, label, value, pw):
-            super().__init__()
-            self.label = label
-            self.value = value
-            self.width  = pw
-            self.height = 0.55 * _inch
-
-        def draw(self):
-            c, w, h = self.canv, self.width, self.height
-
-            # ── Dark slate background (rounded)
-            c.setFillColorRGB(0.118, 0.161, 0.231)     # #1e293b
-            c.roundRect(0, 0, w, h, 6, fill=1, stroke=0)
-
-            # ── Label (left, muted white)
-            lbl_y = h / 2 - 11 * 0.36
-            c.setFont("Helvetica-Bold", 11)
-            c.setFillColorRGB(0.820, 0.851, 0.902)     # #d1d9e6
-            c.drawString(16, lbl_y, self.label)
-
-            # ── Value (right, pure white, larger)
-            val_y = h / 2 - 15 * 0.36
-            c.setFont("Helvetica-Bold", 15)
-            c.setFillColorRGB(1.0, 1.0, 1.0)
-            c.drawRightString(w - 16, val_y, self.value)
-
-    # ── Canvas-drawn header ───────────────────────────────────────────────────
-    _meta_items = [("DATE", date.today().strftime('%d %b %Y'))]
+    # Meta cell (right side)
+    _meta = [("DATE", date.today().strftime("%d %b %Y"))]
+    if client_name:
+        _meta.append(("CLIENT", client_name))
     if rates_last_updated:
-        _meta_items.append(("RATES", rates_last_updated))
-    _meta_items += [("CURRENCY", symbol), ("PERIOD", _period_lbl)]
-    el.append(_HeaderFlowable(_logo_path_ref, _meta_items, PAGE_W))
-    el.append(Spacer(1, 0.20 * inch))
+        _meta.append(("RATES", rates_last_updated))
+    _meta += [("CURRENCY", symbol), ("PERIOD", _period_lbl)]
+    meta_rows = [[Paragraph(l, meta_lbl), Paragraph(v, meta_val)] for l, v in _meta]
+    meta_t = Table(meta_rows, colWidths=[0.75*inch, 1.10*inch])
+    meta_t.setStyle(_bordered())
 
-    # ── Column widths: 7 cols ─────────────────────────────────────────────────
-    # Crawl Type | Vol/Crawl | Freq×Days | Zipcode | CPM | Cost/Crawl | Period Total
-    CW = [1.96*inch, 0.86*inch, 0.96*inch, 0.70*inch, 0.72*inch, 0.88*inch, 0.87*inch]
+    hdr_t = Table([[logo_cell, title_cell, meta_t]],
+                  colWidths=[0.75*inch, PW - 0.75*inch - 1.90*inch, 1.90*inch])
+    hdr_t.setStyle(TableStyle([
+        ("VALIGN",      (0,0),(-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",(0,0),(-1,-1), 0),
+        ("TOPPADDING",  (0,0),(-1,-1), 0),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 0),
+        ("LINEBELOW",   (0,0),(-1,-1), 1.0, C_DARK),
+    ]))
+    el.append(hdr_t)
+    el.append(Spacer(1, 0.18*inch))
 
-    # ── Per-platform sections ─────────────────────────────────────────────────
+    # ── Column widths: Crawl Type | Vol | Freq×Days | Zip | CPM | Cost/Crawl | Total ──
+    CW = [2.00*inch, 0.82*inch, 0.95*inch, 0.65*inch, 0.75*inch, 0.88*inch, 0.85*inch]
+
+    # ── Per-platform tables ───────────────────────────────────────────────────
     for domain in selected_domains:
-        domain_results = [r for r in results if r["domain"] == domain]
-        if not domain_results:
-            continue
-        display_name   = platform_display.get(domain, domain)
-        dom_crawl_usd  = sum(r["total_cost"] for r in domain_results)
-        dom_ss_usd     = sum(r.get("screenshot_total", 0) for r in domain_results)
-        dom_total_usd  = dom_crawl_usd + dom_ss_usd
-        _dom_avg_days  = (sum(r["total_cost"] * r["days"] for r in domain_results) / dom_crawl_usd) if dom_crawl_usd else 30
-        dom_total_str  = _pf(dom_total_usd, _dom_avg_days)
+        dr = [r for r in results if r["domain"] == domain]
+        if not dr: continue
+        disp          = platform_display.get(domain, domain)
+        crawl_usd     = sum(r["total_cost"] for r in dr)
+        ss_usd        = sum(r.get("screenshot_total", 0) for r in dr)
+        dom_total_usd = crawl_usd + ss_usd
+        avg_days      = (sum(r["total_cost"] * r["days"] for r in dr) / crawl_usd) if crawl_usd else 30
+        dom_total_str = _pf(dom_total_usd, avg_days)
 
-        # Canvas-drawn platform banner
-        plat_hdr = _PlatformBannerFlowable(display_name, domain, dom_total_str, PAGE_W)
-        plat_hdr.spaceAfter = 0
+        # Platform header row (dark, spans all cols)
+        plat_row = Table(
+            [[Paragraph(f"{disp}  ({domain})", plat_hdr),
+              Paragraph(f"Platform Total:  {dom_total_str}", plat_tot)]],
+            colWidths=[sum(CW)*0.60, sum(CW)*0.40]
+        )
+        plat_row.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,-1), C_SHDR),
+            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0),(-1,-1), 6),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 6),
+            ("LEFTPADDING",   (0,0),(-1,-1), 8),
+            ("RIGHTPADDING",  (0,0),(-1,-1), 8),
+            ("BOX",           (0,0),(-1,-1), 0.6, C_DARK),
+        ]))
 
-        # Data rows
-        header_row = [
-            Paragraph("Crawl Type",              th_l_s),
-            Paragraph("Vol/Crawl",               th_c_s),
-            Paragraph("Freq \u00d7 Days",        th_c_s),
-            Paragraph("Zip",                     th_c_s),
-            Paragraph(f"CPM ({symbol})",         th_r_s),
-            Paragraph("Cost/Crawl",              th_r_s),
-            Paragraph(f"{_period_lbl} Cost",     th_r_s),
+        # Column header row
+        col_hdr = [
+            Paragraph("Crawl Type",          th_l),
+            Paragraph("Vol/Crawl",           th_c),
+            Paragraph("Freq × Days",    th_c),
+            Paragraph("Zip",                 th_c),
+            Paragraph(f"CPM ({symbol})",     th_r),
+            Paragraph("Cost/Crawl",          th_r),
+            Paragraph(f"{_period_lbl} Cost", th_r),
         ]
-        rows = [header_row]
-        for r in domain_results:
+        rows = [col_hdr]
+        for r in dr:
             rows.append([
-                Paragraph(_html_mod.escape(r["crawl_type"]), td_s),
-                Paragraph(f"{r['volume_per_crawl']:,}", tdc_s),
-                Paragraph(f"{r['freq']}×/day × {r['days']}d", tdc_s),
-                Paragraph(r["zip_mode"].replace(" Zipcode", ""), tdc_s),
-                Paragraph(_cpm_str(r["cost_per_crawl"], r["volume_per_crawl"]), cpm_s),
-                Paragraph(_pf(r["cost_per_crawl"]), tdr_s),
-                Paragraph(_pf(r["total_cost"], r["days"]), tdr_s),
+                Paragraph(_html_mod.escape(r["crawl_type"]), td_l),
+                Paragraph(f"{r['volume_per_crawl']:,}", td_c),
+                Paragraph(f"{r['freq']}×/day × {r['days']}d", td_c),
+                Paragraph(r["zip_mode"].replace(" Zipcode",""), td_c),
+                Paragraph(_cpm(r["cost_per_crawl"], r["volume_per_crawl"]), td_muted),
+                Paragraph(_pf(r["cost_per_crawl"]), td_r),
+                Paragraph(_pf(r["total_cost"], r["days"]), td_rb),
             ])
-        # Screenshot row (shown before subtotal when rate > 0)
-        if dom_ss_usd > 0:
-            _ss_rate_val = domain_results[0].get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)
-            _ss_cpm_str  = f"{symbol}{_ss_rate_val * 1000:.4f}"
-            _ss_total_pages = sum(r.get("screenshot_total", 0) / r.get("screenshot_rate", SCREENSHOT_RATE_DEFAULT) for r in domain_results if r.get("screenshot_rate", 0) > 0)
+        if ss_usd > 0:
+            _ss_rate = dr[0].get("screenshot_rate", SCREENSHOT_RATE_DEFAULT)
             rows.append([
-                Paragraph("  \u2937  Screenshots", ss_lbl_s),
-                Paragraph(f"{int(_ss_total_pages):,}", tdc_s),
-                Paragraph("", tdc_s),
-                Paragraph("", tdc_s),
-                Paragraph(_ss_cpm_str, ss_cpm_s),
-                Paragraph("", tdc_s),
-                Paragraph(_pf(dom_ss_usd, _dom_avg_days), ss_val_s),
+                Paragraph("⤷  Screenshots", _ps("SS", fontSize=8, fontName="Helvetica-Oblique", textColor=C_GRAY, leading=11)),
+                Paragraph("", td_c), Paragraph("", td_c), Paragraph("", td_c),
+                Paragraph(f"{symbol}{_ss_rate*1000:.4f}", td_muted),
+                Paragraph("", td_c),
+                Paragraph(_pf(ss_usd, avg_days), td_rb),
             ])
-
-        # Subtotal (crawl + screenshot)
         rows.append([
-            Paragraph("Platform Total", sub_lbl_s),
-            Paragraph("", tdc_s), Paragraph("", tdc_s), Paragraph("", tdc_s),
-            Paragraph("", tdc_s), Paragraph("", tdc_s),
-            Paragraph(dom_total_str, sub_val_s),
+            Paragraph("Platform Total", sub_lbl),
+            Paragraph("", td_c), Paragraph("", td_c), Paragraph("", td_c),
+            Paragraph("", td_c), Paragraph("", td_c),
+            Paragraph(dom_total_str, sub_val),
         ])
 
         data_t = Table(rows, colWidths=CW, repeatRows=1)
-        data_t.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0),   C_THHDR),
-            ("ROWBACKGROUNDS",(0,1), (-1,-2),  [C_ROWEVEN, C_ROWODD]),
-            ("BACKGROUND",    (0,-1),(-1,-1),  C_SUBTOT),
-            ("LINEBELOW",     (0,0), (-1,0),   0.5, C_RULE),
-            ("LINEABOVE",     (0,-1),(-1,-1),  0.5, C_RULE),
-            ("LINEBELOW",     (0,-1),(-1,-1),  0.5, C_RULE),
-            ("INNERGRID",     (0,1), (-1,-2),  0.3, C_RULE),
-            ("VALIGN",        (0,0), (-1,-1),  "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1),  6),
-            ("BOTTOMPADDING", (0,0), (-1,-1),  6),
-            ("LEFTPADDING",   (0,0), (-1,-1),  8),
-            ("RIGHTPADDING",  (0,0), (-1,-1),  8),
+        n = len(rows)
+        data_t.setStyle(_bordered([
+            ("BACKGROUND",    (0,0), (-1,0),   C_THDR),
+            ("BACKGROUND",    (0,-1),(-1,-1),  C_LGRAY),
+            ("LINEABOVE",     (0,-1),(-1,-1),  0.6, C_DARK),
+            ("LINEBELOW",     (0,-1),(-1,-1),  0.6, C_DARK),
         ]))
-        data_t.spaceBefore = 0
-
-        el.append(KeepTogether([plat_hdr, data_t]))
-        el.append(Spacer(1, 0.22 * inch))
+        el.append(KeepTogether([plat_row, data_t]))
+        el.append(Spacer(1, 0.18*inch))
 
     # ── Platform summary ──────────────────────────────────────────────────────
-    el.append(HRFlowable(width="100%", thickness=0.5, color=C_RULE, spaceAfter=10))
     sum_rows = [[
-        Paragraph("Platform Summary", sum_th_s),
-        Paragraph(f"{_period_lbl} Cost ({symbol})", sum_th_s),
+        Paragraph("Platform Summary", sum_hdr_l),
+        Paragraph(f"{_period_lbl} Cost ({symbol})", sum_hdr_r),
     ]]
     for domain in selected_domains:
         _dr  = [r for r in results if r["domain"] == domain]
         _du  = sum(r["total_cost"] + r.get("screenshot_total", 0) for r in _dr)
         if _du == 0: continue
-        _crawl_usd = sum(r["total_cost"] for r in _dr)
-        _ad  = (sum(r["total_cost"] * r["days"] for r in _dr) / _crawl_usd) if _crawl_usd else 30
+        _cu  = sum(r["total_cost"] for r in _dr)
+        _ad  = (sum(r["total_cost"] * r["days"] for r in _dr) / _cu) if _cu else 30
         sum_rows.append([
-            Paragraph(_html_mod.escape(platform_display.get(domain, domain)), sum_td_s),
-            Paragraph(_pf(_du, _ad), sum_val_s),
+            Paragraph(_html_mod.escape(platform_display.get(domain, domain)), sum_td_l),
+            Paragraph(_pf(_du, _ad), sum_td_r),
         ])
-    sum_t = Table(sum_rows, colWidths=[PAGE_W * 0.72, PAGE_W * 0.28])
-    sum_t.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,0),  C_THHDR),
-        ("ROWBACKGROUNDS",(0,1),(-1,-1), [C_ROWEVEN, C_ROWODD]),
-        ("INNERGRID",     (0,1),(-1,-1), 0.3, C_RULE),
-        ("LINEBELOW",     (0,0),(-1,0),  0.5, C_RULE),
-        ("LINEBELOW",     (0,-1),(-1,-1),0.5, C_RULE),
-        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
-        ("TOPPADDING",    (0,0),(-1,-1), 7),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 7),
-        ("LEFTPADDING",   (0,0),(-1,-1), 10),
-        ("RIGHTPADDING",  (0,0),(-1,-1), 10),
+    # Grand total row
+    sum_rows.append([
+        Paragraph(f"Grand Total  ·  {_period_lbl}", gt_lbl),
+        Paragraph(_pf(grand_total, _gt_avg_days), gt_val),
+    ])
+
+    sum_t = Table(sum_rows, colWidths=[PW * 0.70, PW * 0.30])
+    n = len(sum_rows)
+    sum_t.setStyle(_bordered([
+        ("BACKGROUND",    (0,0), (-1,0),   C_THDR),
+        ("BACKGROUND",    (0,-1),(-1,-1),  C_BLACK),
+        ("LINEABOVE",     (0,-1),(-1,-1),  0.8, C_BLACK),
     ]))
     el.append(sum_t)
-    el.append(Spacer(1, 0.14 * inch))
+    el.append(Spacer(1, 0.20*inch))
 
-    # ── Canvas-drawn grand total ──────────────────────────────────────────────
-    el.append(_GrandTotalFlowable(
-        f"Grand Total  \u00b7  {_period_lbl}",
-        _pf(grand_total, _gt_avg_days),
-        PAGE_W,
-    ))
-    el.append(Spacer(1, 0.18 * inch))
-    el.append(HRFlowable(width="100%", thickness=0.4, color=C_RULE, spaceAfter=6))
+    # ── Footer ────────────────────────────────────────────────────────────────
     el.append(Paragraph(
         "Rates are benchmarks derived from internal crawl cost data. "
         "Actual costs may vary based on site complexity, proxy usage and infrastructure load. "
-        "This estimate is for internal planning purposes only.  "
-        f"CPM = cost per 1,000 records.",
+        "This estimate is for internal planning purposes only. "
+        "CPM = cost per 1,000 records.",
         foot_s,
     ))
 
@@ -770,50 +624,23 @@ def render_cost_calculator():
                             unsafe_allow_html=True)
 
 
-    # ── Generate / Scenario buttons ───────────────────────────────────────────
+    # ── Generate button ───────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
-    g1, g2, g3 = st.columns([2, 1, 2])
+    g1, g2 = st.columns([3, 1])
     with g1:
         st.text_input(
-            "Client name (for saving)",
+            "Client Name",
             placeholder="e.g. Hindustan Unilever",
             key="cc_client_name",
-            label_visibility="collapsed",
-        )
-        _scenario_name = st.text_input(
-            "Scenario name (optional)",
-            placeholder="e.g. With Zipcode / High Freq",
-            key="cc_scenario_name",
-            label_visibility="collapsed",
         )
     with g2:
-        if st.button("📊  Generate Estimate ↓", width="stretch", type="primary"):
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("📊  Generate Estimate", width="stretch", type="primary"):
             st.session_state["cc_show_results"] = True
             components.html(
                 "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
                 height=0,
             )
-    with g3:
-        if st.session_state.get("cc_show_results"):
-            _sname = (_scenario_name.strip() or
-                      f"Scenario {len(st.session_state.get('cc_saved_scenarios', {})) + 1}")
-            if st.button(f"💾  Save as '{_sname}'", width="stretch"):
-                st.session_state.setdefault("cc_saved_scenarios", {})
-                _snap = {
-                    "domains": list(selected_domains),
-                    "config": {
-                        k: v for k, v in st.session_state.items()
-                        if isinstance(k, str) and k.startswith("cc_") and k not in (
-                            "cc_show_results", "cc_saved_scenarios",
-                            "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
-                            "cc_scenario_name", "cc_gen_top",
-                            "cc_currency", "cc_period", "cc_fx_rate",
-                        )
-                    },
-                }
-                _snap["results"] = list(st.session_state.get("_cc_last_results", []))
-                st.session_state["cc_saved_scenarios"][_sname] = _snap
-                st.success(f"Saved scenario '{_sname}'")
 
     if not st.session_state.get("cc_show_results"):
         return
@@ -1085,11 +912,13 @@ def render_cost_calculator():
     section_header("📥", "Download Estimate")
     dl1, dl2, _ = st.columns([1, 1, 2])
 
-    _cur_label = _currency.split()[0]
-    _pdf_note  = f"Currency: {_cur_label}" + (f" (1 USD = {_sym}{_fx:,.2f})" if _use_inr else "") + f"  ·  Period: {_period}"
+    _cur_label  = _currency.split()[0]
+    _pdf_note   = f"Currency: {_cur_label}" + (f" (1 USD = {_sym}{_fx:,.2f})" if _use_inr else "") + f"  ·  Period: {_period}"
+    _client_name = st.session_state.get("cc_client_name", "").strip()
     pdf_bytes = _generate_cost_pdf(
         results, grand_total_usd, selected_domains, PLATFORM_DISPLAY, _rates_last_updated,
         fx=_fx, symbol=_sym, period=_period, period_factor_fn=_period_factor, pdf_note=_pdf_note,
+        client_name=_client_name,
     )
     with dl1:
         if st.download_button(
