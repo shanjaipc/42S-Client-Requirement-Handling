@@ -470,8 +470,16 @@ def render_monthly_review():
             own = st.text_input("Owner", value=st.session_state.get(f"mr_oi_own_{i}", ""),
                                  key=f"mr_oi_own_{i}", label_visibility="collapsed", placeholder="Owner")
         with oc6:
-            tdt = st.text_input("Date", value=st.session_state.get(f"mr_oi_dt_{i}", ""),
-                                 key=f"mr_oi_dt_{i}", label_visibility="collapsed", placeholder="YYYY-MM-DD")
+            _oi_dt_raw = st.session_state.get(f"mr_oi_dt_{i}")
+            _oi_dt_val = None
+            if isinstance(_oi_dt_raw, date):
+                _oi_dt_val = _oi_dt_raw
+            elif isinstance(_oi_dt_raw, str):
+                try: _oi_dt_val = date.fromisoformat(_oi_dt_raw)
+                except ValueError: pass
+            tdt_obj = st.date_input("Date", value=_oi_dt_val, key=f"mr_oi_dt_{i}",
+                                    label_visibility="collapsed")
+            tdt = str(tdt_obj) if tdt_obj else ""
         open_rows.append({"Issue ID": iid, "Status": sta, "Site(s) / Description": des,
                            "Action Plan": act, "Owner": own, "Target Date": tdt})
         st.markdown('<hr style="margin:0;border-color:#f1f5f9;">', unsafe_allow_html=True)
@@ -513,8 +521,16 @@ def render_monthly_review():
             waw = st.text_input("Awaiting", value=st.session_state.get(f"mr_wi_aw_{i}", ""),
                                   key=f"mr_wi_aw_{i}", label_visibility="collapsed", placeholder="Awaiting from client")
         with wc4:
-            wdt = st.text_input("Since", value=st.session_state.get(f"mr_wi_dt_{i}", ""),
-                                  key=f"mr_wi_dt_{i}", label_visibility="collapsed", placeholder="YYYY-MM-DD")
+            _wi_dt_raw = st.session_state.get(f"mr_wi_dt_{i}")
+            _wi_dt_val = None
+            if isinstance(_wi_dt_raw, date):
+                _wi_dt_val = _wi_dt_raw
+            elif isinstance(_wi_dt_raw, str):
+                try: _wi_dt_val = date.fromisoformat(_wi_dt_raw)
+                except ValueError: pass
+            wdt_obj = st.date_input("Since", value=_wi_dt_val, key=f"mr_wi_dt_{i}",
+                                    label_visibility="collapsed")
+            wdt = str(wdt_obj) if wdt_obj else ""
         wait_rows.append({"Issue ID": wid, "What was Delivered / Resolved": wdl,
                            "Awaiting from Client": waw, "Since (Date)": wdt})
         st.markdown('<hr style="margin:0;border-color:#f1f5f9;">', unsafe_allow_html=True)
@@ -604,14 +620,30 @@ def render_monthly_review():
         _safe = lambda s: _re.sub(r"[^\w-]+", "_", s.strip()) or "Review"
         fname = f"Monthly_Review_{_safe(client_val)}_{_safe(period_val)}.pdf"
 
-        try:
-            pdf_bytes = _generate_pdf(identity, kpis, edited_cat, open_df, wait_df, narrative)
+        if st.button("📄  Generate PDF", type="primary", key="mr_gen_pdf_btn"):
+            try:
+                # Strip rows that are completely empty before building the PDF
+                _cat_pdf  = edited_cat[edited_cat["Total"] > 0].reset_index(drop=True)
+                _open_pdf = open_df[
+                    open_df["Issue ID"].str.strip().astype(bool) |
+                    open_df["Site(s) / Description"].str.strip().astype(bool)
+                ].reset_index(drop=True)
+                _wait_pdf = wait_df[
+                    wait_df["Issue ID"].str.strip().astype(bool) |
+                    wait_df["What was Delivered / Resolved"].str.strip().astype(bool)
+                ].reset_index(drop=True)
+                st.session_state["_mr_pdf_cache"] = _generate_pdf(
+                    identity, kpis, _cat_pdf, _open_pdf, _wait_pdf, narrative
+                )
+                st.session_state["_mr_pdf_fname"] = fname
+            except Exception as e:
+                st.error(f"PDF generation failed: {e}")
+
+        if st.session_state.get("_mr_pdf_cache"):
             st.download_button(
-                "Download PDF",
-                data=pdf_bytes,
-                file_name=fname,
+                "⬇️  Download PDF",
+                data=st.session_state["_mr_pdf_cache"],
+                file_name=st.session_state.get("_mr_pdf_fname", fname),
                 mime="application/pdf",
                 key="mr_dl_pdf",
             )
-        except Exception as e:
-            st.error(f"PDF generation failed: {e}")

@@ -85,7 +85,8 @@ def _safe_filename(name: str, suffix: str = "") -> str:
 # PERSISTENT SESSION  (file-based, stdlib only, 7-day expiry)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SESSION_FILE = Path(".42s_session.json")
+_SESSION_DIR = Path(".42s_sessions")
+_SESSION_DIR.mkdir(exist_ok=True)
 _SESSION_TTL_DAYS = 7
 
 # ── Server-side lockout (per username, survives new tabs / refreshes) ─────────
@@ -141,7 +142,16 @@ def _save_session(username: str, display_name: str) -> str:
         "expires": (datetime.now(timezone.utc) + timedelta(days=_SESSION_TTL_DAYS)).isoformat(),
     }
     try:
-        _SESSION_FILE.write_text(json.dumps(data))
+        (_SESSION_DIR / f"{token}.json").write_text(json.dumps(data))
+        # Prune expired session files
+        now = datetime.now(timezone.utc)
+        for f in _SESSION_DIR.glob("*.json"):
+            try:
+                d = json.loads(f.read_text())
+                if datetime.fromisoformat(d["expires"]) < now:
+                    f.unlink(missing_ok=True)
+            except Exception:
+                f.unlink(missing_ok=True)
     except OSError:
         pass
     return token
@@ -152,24 +162,27 @@ def _load_session(token: str):
     if not token:
         return None, None
     try:
-        if not _SESSION_FILE.exists():
+        session_file = _SESSION_DIR / f"{token}.json"
+        if not session_file.exists():
             return None, None
-        data = json.loads(_SESSION_FILE.read_text())
+        data = json.loads(session_file.read_text())
         if data.get("token") != token:
             return None, None
         if datetime.now(timezone.utc) > datetime.fromisoformat(data["expires"]):
-            _SESSION_FILE.unlink(missing_ok=True)
+            session_file.unlink(missing_ok=True)
             return None, None
         return data["username"], data["display_name"]
     except (OSError, KeyError, ValueError, json.JSONDecodeError):
         return None, None
 
 
-
-
-def _clear_session() -> None:
+def _clear_session(token: str = "") -> None:
     try:
-        _SESSION_FILE.unlink(missing_ok=True)
+        if token:
+            (_SESSION_DIR / f"{token}.json").unlink(missing_ok=True)
+        else:
+            for f in _SESSION_DIR.glob("*.json"):
+                f.unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -1063,9 +1076,9 @@ def render_login():
 <div style="opacity:.8;">Too many failed attempts.<br>Try again in <strong>{remaining // 60}m {remaining % 60}s</strong>.</div>
 </div></div>""", unsafe_allow_html=True)
         st.markdown("""<div style="text-align:center;padding:20px 0 6px 0;font-size:.72rem;color:#94a3b8;font-family:'Inter',sans-serif;">Access restricted to authorised users only &middot; 42Signals &copy; 2026</div>""", unsafe_allow_html=True)
-        # Auto-refresh every second so the countdown ticks live
-        time.sleep(1)
-        st.rerun()
+        # Auto-refresh every second via JS so the server thread is not blocked
+        components.html('<script>setTimeout(()=>window.parent.location.reload(),1100)</script>', height=0)
+        st.stop()
 
     # ── Session-expiry notice ─────────────────────────────────────────────
     if st.session_state.get("_session_expired"):
@@ -1074,7 +1087,6 @@ def render_login():
 <div><div style="font-weight:700;margin-bottom:3px;">Session expired</div>
 <div style="opacity:.85;">Your session has expired. Please sign in again.</div>
 </div></div>""", unsafe_allow_html=True)
-        st.session_state["_session_expired"] = False
 
     # ── Form (st.form enables Enter-to-submit) ────────────────────────────
     with st.form("login_form", clear_on_submit=False):
@@ -1128,8 +1140,10 @@ def render_login():
             st.session_state["authenticated"]   = True
             st.session_state["current_user"]    = clean_user
             st.session_state["display_name"]    = display_name
+            st.session_state["_user_role"]      = (get_user(clean_user) or {}).get("role", "")
             st.session_state["failed_attempts"] = 0
             st.session_state["lockout_until"]   = 0.0
+            st.session_state["_session_expired"] = False
             _clear_lockout(clean_user)
             _new_analytics_sid = str(uuid.uuid4())
             st.session_state["analytics_sid"] = _new_analytics_sid
@@ -1186,6 +1200,16 @@ with st.sidebar:
 
     st.markdown('<hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 14px 0;">', unsafe_allow_html=True)
 
+    _NAV_EMOJI = {
+        "main":           "📋",
+        "feasibility":    "📊",
+        "cost_calc":      "🧮",
+        "monthly_review": "📅",
+        "ext_tools":      "🔗",
+        "analytics":      "📈",
+        "user_mgmt":      "👥",
+    }
+
     def _nav_group(group_label, items):
         st.markdown(
             f'<div style="color:#9ca3af;font-size:0.62rem;text-transform:uppercase;'
@@ -1206,11 +1230,12 @@ with st.sidebar:
                     unsafe_allow_html=True,
                 )
             else:
-                if st.button(label, key=f"nav_{key}", width="stretch"):
+                _icon = _NAV_EMOJI.get(key, "")
+                if st.button(f"{_icon}  {label}", key=f"nav_{key}", width="stretch"):
                     st.session_state["page"] = key
                     st.rerun()
 
-    _current_role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+    _current_role = st.session_state.get("_user_role", "")
 
     _NAV_TOOLS = {
         "main": (
@@ -1280,7 +1305,7 @@ with st.sidebar:
 
     if st.button("Sign Out", key="logout_btn", width="stretch"):
         log_event(EVENT_LOGOUT, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""))
-        _clear_session()
+        _clear_session(st.session_state.get("ls_write_token", ""))
         st.query_params.clear()
         st.session_state["ls_clear"]        = True
         st.session_state["authenticated"]   = False
@@ -1585,6 +1610,7 @@ elif not st.session_state["authenticated"]:
             st.session_state["authenticated"] = True
             st.session_state["current_user"]  = _sess_user
             st.session_state["display_name"]  = _sess_display
+            st.session_state["_user_role"]    = (get_user(_sess_user) or {}).get("role", "")
             st.rerun()
         else:
             # Token is invalid/expired — wipe it from localStorage
@@ -1623,7 +1649,7 @@ else:
         from page_modules.monthly_review import render_monthly_review
         render_monthly_review()
     elif page == "user_mgmt":
-        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+        _role = st.session_state.get("_user_role", "")
         if _role == "admin":
             from page_modules.user_mgmt import render_user_management
             render_user_management()
@@ -1631,9 +1657,8 @@ else:
             st.error("Access denied. This page is restricted to administrators.")
             st.session_state["page"] = "main"
             st.rerun()
-            st.rerun()
     elif page == "analytics":
-        _role = (get_user(st.session_state.get("current_user", "") or "") or {}).get("role", "")
+        _role = st.session_state.get("_user_role", "")
         if _role == "admin":
             from page_modules.analytics_page import render_analytics
             render_analytics()

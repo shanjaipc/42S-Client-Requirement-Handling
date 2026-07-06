@@ -561,6 +561,7 @@ def render_main_form():
                             except ValueError: pass
                         st.session_state[k] = v
                     st.session_state["_editing_submission_file"] = None
+                    st.session_state["_form_touched"] = False
                     st.rerun()
             with tc2:
                 if st.button("🗑️  Delete Template", key="_tpl_del_btn"):
@@ -715,8 +716,9 @@ def render_main_form():
                     festive.update(_festive_schedule_config())
                 form_data["Festive Sale Crawls"] = festive
 
-        # ── 9. Final Alignment ────────────────────────────────────────────
-        section_header("🎯", "9. Final Alignment")
+        # ── Final Alignment (section number follows the modules actually selected) ─
+        _final_n = 3 + len(modules)
+        section_header("🎯", f"{_final_n}. Final Alignment")
         form_data["Final Alignment"] = {
             "Client Core Objective": st.text_area(
                 "What is the client's core objective? *",
@@ -725,8 +727,7 @@ def render_main_form():
             ),
         }
 
-        # ── 10. Comments ──────────────────────────────────────────────────
-        section_header("💬", "10. Comments & Notes")
+        section_header("💬", f"{_final_n + 1}. Comments & Notes")
         form_data["Comments & Notes"] = {
             "Additional Comments": st.text_area(
                 "Any additional notes or special instructions",
@@ -743,12 +744,14 @@ def render_main_form():
         if st.button("⬇️  Generate & Download PDF", type="primary", width="stretch"):
             if not client_name:
                 st.error("Enter a Client Name before generating the PDF.")
+                components.html("<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:0,behavior:'smooth'});</script>", height=0)
                 st.stop()
             _errors = _validate_form(form_data, modules)
             if _errors:
                 st.error("Please fix the following before generating the PDF:")
                 for _e in _errors:
                     st.markdown(f"- {_e}")
+                components.html("<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:0,behavior:'smooth'});</script>", height=0)
                 st.stop()
             log_event(EVENT_GENERATE_REQ_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "main", {"client": client_name})
             try:

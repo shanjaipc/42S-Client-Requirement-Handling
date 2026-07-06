@@ -3,6 +3,7 @@ import streamlit.components.v1 as components  # type: ignore
 import csv
 import html as _html_mod
 import json
+import threading
 import gspread  # type: ignore
 from google.oauth2.credentials import Credentials  # type: ignore
 from google.auth.transport.requests import Request  # type: ignore
@@ -27,24 +28,28 @@ SCREENSHOT_RATE_DEFAULT = 0.00044   # $/page — editable per site in the UI
 _GSHEET_ID       = "1oLHi7Jn9JGP9SDSR5v6Cm02ph82fxO1QI5e7eqE0XyE"
 _GSHEET_TAB      = "Sheet1"
 _OAUTH_TOKEN_PATH = Path(__file__).parent.parent / "oauth_token.json"
+_token_lock = threading.Lock()
 
 
 def _get_gspread_client():
-    with open(_OAUTH_TOKEN_PATH) as f:
-        td = json.load(f)
-    creds = Credentials(
-        token=td.get("token"),
-        refresh_token=td["refresh_token"],
-        token_uri=td["token_uri"],
-        client_id=td["client_id"],
-        client_secret=td["client_secret"],
-        scopes=td["scopes"],
-    )
-    if not creds.valid:
-        creds.refresh(Request())
-        td["token"] = creds.token
-        with open(_OAUTH_TOKEN_PATH, "w") as f:
-            json.dump(td, f, indent=2)
+    with _token_lock:
+        with open(_OAUTH_TOKEN_PATH) as f:
+            td = json.load(f)
+        creds = Credentials(
+            token=td.get("token"),
+            refresh_token=td["refresh_token"],
+            token_uri=td["token_uri"],
+            client_id=td["client_id"],
+            client_secret=td["client_secret"],
+            scopes=td["scopes"],
+        )
+        if not creds.valid:
+            creds.refresh(Request())
+            td["token"] = creds.token
+            _tmp = _OAUTH_TOKEN_PATH.with_suffix(".tmp")
+            with open(_tmp, "w") as f:
+                json.dump(td, f, indent=2)
+            os.replace(_tmp, _OAUTH_TOKEN_PATH)
     return gspread.authorize(creds)
 
 
@@ -383,14 +388,11 @@ def render_cost_calculator():
     with _new_col:
         st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
         if st.button("✚ New Estimate", key="_cc_new_btn", width="stretch"):
-            _cc_widget_keys = {
-                "cc_gen_top", "cc_currency", "cc_period", "cc_fx_rate",
-                "cc_domain_input_mode", "cc_bulk_paste", "cc_bulk_csv",
-                "cc_scenario_name", "cc_show_results", "cc_saved_scenarios",
-            }
+            _cc_keep = {"cc_gen_top", "cc_currency", "cc_period", "cc_fx_rate"}
             for _k in list(st.session_state.keys()):
-                if isinstance(_k, str) and _k.startswith("cc_") and _k not in _cc_widget_keys:
+                if isinstance(_k, str) and _k.startswith("cc_") and _k not in _cc_keep:
                     del st.session_state[_k]
+            st.session_state["cc_show_results"] = False
             st.session_state.pop("_editing_cost_file", None)
             st.rerun()
 
@@ -637,6 +639,7 @@ def render_cost_calculator():
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("📊  Generate Estimate", width="stretch", type="primary"):
             st.session_state["cc_show_results"] = True
+            st.session_state.pop("_cc_pdf_cache", None)   # invalidate cached PDF
             components.html(
                 "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
                 height=0,
@@ -912,14 +915,16 @@ def render_cost_calculator():
     section_header("📥", "Download Estimate")
     dl1, dl2, _ = st.columns([1, 1, 2])
 
-    _cur_label  = _currency.split()[0]
-    _pdf_note   = f"Currency: {_cur_label}" + (f" (1 USD = {_sym}{_fx:,.2f})" if _use_inr else "") + f"  ·  Period: {_period}"
+    _cur_label   = _currency.split()[0]
+    _pdf_note    = f"Currency: {_cur_label}" + (f" (1 USD = {_sym}{_fx:,.2f})" if _use_inr else "") + f"  ·  Period: {_period}"
     _client_name = st.session_state.get("cc_client_name", "").strip()
-    pdf_bytes = _generate_cost_pdf(
-        results, grand_total_usd, selected_domains, PLATFORM_DISPLAY, _rates_last_updated,
-        fx=_fx, symbol=_sym, period=_period, period_factor_fn=_period_factor, pdf_note=_pdf_note,
-        client_name=_client_name,
-    )
+    if "_cc_pdf_cache" not in st.session_state:
+        st.session_state["_cc_pdf_cache"] = _generate_cost_pdf(
+            results, grand_total_usd, selected_domains, PLATFORM_DISPLAY, _rates_last_updated,
+            fx=_fx, symbol=_sym, period=_period, period_factor_fn=_period_factor, pdf_note=_pdf_note,
+            client_name=_client_name,
+        )
+    pdf_bytes = st.session_state["_cc_pdf_cache"]
     with dl1:
         if st.download_button(
             "⬇️  Download PDF",
@@ -943,7 +948,7 @@ def render_cost_calculator():
             f'{r["volume_per_crawl"]},{r["freq"]},{r["days"]},{r["zip_mode"]},'
             f'{_cpm_v:.6f},{_cpc:.6f},{_tot:.6f}'
         )
-    _gt_csv = sum(r["total_cost"] * _fx * _period_factor(r["days"]) for r in results)
+    _gt_csv = sum((r["total_cost"] + r.get("screenshot_total", 0)) * _fx * _period_factor(r["days"]) for r in results)
     csv_lines += ["", f'Grand Total,,,,,,,,,{_gt_csv:.6f}']
     with dl2:
         if st.download_button(

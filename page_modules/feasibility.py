@@ -165,8 +165,12 @@ def render_feasibility():
                         doc.add_paragraph(d, style="List Bullet")
 
                     doc.add_heading("Crawl Configuration", level=2)
-                    doc.add_paragraph(f"Crawl Type: {crawl_type or 'Not specified'}")
-                    doc.add_paragraph(f"Special Requirements: {', '.join(crawl_features) or 'None'}")
+                    _ct_display = crawl_type or (", ".join(crawl_options) if crawl_options else "Not specified")
+                    doc.add_paragraph(f"Crawl Type: {_ct_display}")
+                    _extra = [o for o in crawl_features if o != "Others"]
+                    if "Others" in crawl_features and others_desc:
+                        _extra.append(f"Others: {others_desc}")
+                    doc.add_paragraph(f"Special Requirements: {', '.join(_extra) or 'None'}")
                     if others_desc:
                         doc.add_paragraph(f"Others: {others_desc}")
 
