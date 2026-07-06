@@ -192,6 +192,7 @@ def _validate_form(form_data, modules):
     return errors
 
 
+@st.cache_data(ttl=30)
 def _load_form_templates() -> dict:
     if not _TEMPLATES_FILE.exists():
         return {}
@@ -202,19 +203,21 @@ def _load_form_templates() -> dict:
 
 
 def _save_form_template(name: str, snapshot: dict) -> None:
-    tpls = _load_form_templates()
+    tpls = dict(_load_form_templates())
     tpls[name] = {"snapshot": snapshot, "saved_at": datetime.now().isoformat()}
     try:
         _TEMPLATES_FILE.write_text(json.dumps(tpls, indent=2, default=_json_default))
+        _load_form_templates.clear()
     except OSError:
         pass
 
 
 def _delete_form_template(name: str) -> None:
-    tpls = _load_form_templates()
+    tpls = dict(_load_form_templates())
     tpls.pop(name, None)
     try:
         _TEMPLATES_FILE.write_text(json.dumps(tpls, indent=2, default=_json_default))
+        _load_form_templates.clear()
     except OSError:
         pass
 

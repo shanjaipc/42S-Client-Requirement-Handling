@@ -14,6 +14,7 @@ import re
 import time
 import json
 import uuid
+import threading
 from pathlib import Path
 from typing import Optional
 from credentials import (
@@ -86,7 +87,6 @@ def _safe_filename(name: str, suffix: str = "") -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SESSION_DIR = Path(".42s_sessions")
-_SESSION_DIR.mkdir(exist_ok=True)
 _SESSION_TTL_DAYS = 7
 
 # ── Server-side lockout (per username, survives new tabs / refreshes) ─────────
@@ -133,7 +133,23 @@ def _clear_lockout(username: str) -> None:
         pass
 
 
+def _prune_sessions() -> None:
+    """Delete expired session files. Called in a background thread to avoid blocking login."""
+    try:
+        now = datetime.now(timezone.utc)
+        for f in _SESSION_DIR.glob("*.json"):
+            try:
+                d = json.loads(f.read_text())
+                if datetime.fromisoformat(d["expires"]) < now:
+                    f.unlink(missing_ok=True)
+            except Exception:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def _save_session(username: str, display_name: str) -> str:
+    _SESSION_DIR.mkdir(exist_ok=True)
     token = str(uuid.uuid4())
     data = {
         "token": token,
@@ -143,15 +159,7 @@ def _save_session(username: str, display_name: str) -> str:
     }
     try:
         (_SESSION_DIR / f"{token}.json").write_text(json.dumps(data))
-        # Prune expired session files
-        now = datetime.now(timezone.utc)
-        for f in _SESSION_DIR.glob("*.json"):
-            try:
-                d = json.loads(f.read_text())
-                if datetime.fromisoformat(d["expires"]) < now:
-                    f.unlink(missing_ok=True)
-            except Exception:
-                f.unlink(missing_ok=True)
+        threading.Thread(target=_prune_sessions, daemon=True).start()
     except OSError:
         pass
     return token
@@ -1063,7 +1071,12 @@ def render_login():
     _preview_user = st.session_state.get("login_username_preview", "")
 
     now = time.time()
-    _srv_attempts, _srv_lockout_until = _get_lockout(_preview_user) if _preview_user else (0, 0.0)
+    # Re-read lockout file only when username changes, not on every keystroke
+    if _preview_user and _preview_user != st.session_state.get("_lockout_last_user", ""):
+        _lk_attempts, _lk_until = _get_lockout(_preview_user)
+        st.session_state["_lockout_last_user"] = _preview_user
+        st.session_state["_lockout_cache"]     = (_lk_attempts, _lk_until)
+    _srv_attempts, _srv_lockout_until = st.session_state.get("_lockout_cache", (0, 0.0))
     # Also check session-state lockout (covers anonymous pre-username-entry state)
     _ss_lockout = st.session_state["lockout_until"]
     locked    = (_srv_lockout_until > now) or (_ss_lockout > now)
@@ -1143,7 +1156,9 @@ def render_login():
             st.session_state["_user_role"]      = (get_user(clean_user) or {}).get("role", "")
             st.session_state["failed_attempts"] = 0
             st.session_state["lockout_until"]   = 0.0
-            st.session_state["_session_expired"] = False
+            st.session_state["_session_expired"]   = False
+            st.session_state.pop("_lockout_cache",     None)
+            st.session_state.pop("_lockout_last_user", None)
             _clear_lockout(clean_user)
             _new_analytics_sid = str(uuid.uuid4())
             st.session_state["analytics_sid"] = _new_analytics_sid

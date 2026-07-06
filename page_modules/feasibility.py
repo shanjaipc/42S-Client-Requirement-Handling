@@ -89,15 +89,10 @@ def render_feasibility():
         section_header("🌐", "Domain List")
         num_domains = st.number_input("Number of Domains", min_value=1, max_value=50, step=1, value=1, key="feas_num_domains")
         domains = []
-        if num_domains <= 6:
-            cols = st.columns(min(int(num_domains), 3))
-            for i in range(int(num_domains)):
-                with cols[i % 3]:
-                    d = st.text_input(f"Domain {i+1}", placeholder="example.com", key=f"feas_domain_{i}")
-                    if d:
-                        domains.append(d)
-        else:
-            for i in range(int(num_domains)):
+        _ncols = min(int(num_domains), 3)
+        cols = st.columns(_ncols)
+        for i in range(int(num_domains)):
+            with cols[i % _ncols]:
                 d = st.text_input(f"Domain {i+1}", placeholder="example.com", key=f"feas_domain_{i}")
                 if d:
                     domains.append(d)

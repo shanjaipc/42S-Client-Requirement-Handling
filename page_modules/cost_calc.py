@@ -44,7 +44,13 @@ def _get_gspread_client():
             scopes=td["scopes"],
         )
         if not creds.valid:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as _refresh_err:
+                raise RuntimeError(
+                    f"Google OAuth token refresh failed: {_refresh_err}. "
+                    "Ask an admin to re-authorise the Google Sheets connection."
+                ) from _refresh_err
             td["token"] = creds.token
             _tmp = _OAUTH_TOKEN_PATH.with_suffix(".tmp")
             with open(_tmp, "w") as f:
@@ -60,7 +66,7 @@ def _safe_float(val, default=0.0):
         return default
 
 
-@st.cache_data(ttl=300, show_spinner="Loading rates from Google Sheets…")
+@st.cache_data(ttl=900, show_spinner="Loading rates from Google Sheets…")
 def _load_rates_from_gsheet():
     """Fetch crawl cost rates from the Google Sheet. Cached for 5 minutes.
 
@@ -531,6 +537,8 @@ def render_cost_calculator():
     with _step2_btn:
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
         if st.button("📊 Generate ↓", key="cc_gen_top", width="stretch", type="primary"):
+            st.session_state.pop("_cc_pdf_cache", None)
+            st.session_state.pop("_cc_csv_cache", None)
             st.session_state["cc_show_results"] = True
 
     for domain in selected_domains:
@@ -577,9 +585,9 @@ def render_cost_calculator():
                     _ci += 1
                     with _ecols[_ci]:
                         _default_ss_rate = RATES.get(domain, {}).get("without", {}).get("screenshot", SCREENSHOT_RATE_DEFAULT)
-                        st.number_input("📸 Rate ($/page)", min_value=0.0,
+                        st.number_input("📸 Rate ($/page)", min_value=0.0, max_value=0.01,
                                         value=float(st.session_state.get(f"cc_{domain}_ss_rate", _default_ss_rate)),
-                                        step=0.000001, format="%.6f",
+                                        step=0.00001, format="%.5f",
                                         key=f"cc_{domain}_ss_rate")
 
             if not selected_cts:
@@ -639,7 +647,8 @@ def render_cost_calculator():
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("📊  Generate Estimate", width="stretch", type="primary"):
             st.session_state["cc_show_results"] = True
-            st.session_state.pop("_cc_pdf_cache", None)   # invalidate cached PDF
+            st.session_state.pop("_cc_pdf_cache", None)
+            st.session_state.pop("_cc_csv_cache", None)
             components.html(
                 "<script>window.parent.document.querySelector('[data-testid=\"stAppViewContainer\"] > section')?.scrollTo({top:999999,behavior:'smooth'});</script>",
                 height=0,
@@ -919,11 +928,12 @@ def render_cost_calculator():
     _pdf_note    = f"Currency: {_cur_label}" + (f" (1 USD = {_sym}{_fx:,.2f})" if _use_inr else "") + f"  ·  Period: {_period}"
     _client_name = st.session_state.get("cc_client_name", "").strip()
     if "_cc_pdf_cache" not in st.session_state:
-        st.session_state["_cc_pdf_cache"] = _generate_cost_pdf(
-            results, grand_total_usd, selected_domains, PLATFORM_DISPLAY, _rates_last_updated,
-            fx=_fx, symbol=_sym, period=_period, period_factor_fn=_period_factor, pdf_note=_pdf_note,
-            client_name=_client_name,
-        )
+        with st.spinner("Building PDF…"):
+            st.session_state["_cc_pdf_cache"] = _generate_cost_pdf(
+                results, grand_total_usd, selected_domains, PLATFORM_DISPLAY, _rates_last_updated,
+                fx=_fx, symbol=_sym, period=_period, period_factor_fn=_period_factor, pdf_note=_pdf_note,
+                client_name=_client_name,
+            )
     pdf_bytes = st.session_state["_cc_pdf_cache"]
     with dl1:
         if st.download_button(
@@ -935,25 +945,27 @@ def render_cost_calculator():
         ):
             log_event(EVENT_DOWNLOAD_COST_PDF, st.session_state.get("current_user", ""), st.session_state.get("analytics_sid", ""), "cost_calc")
 
-    _csv_cur  = _cur_label
-    _csv_hdr  = f"Platform,Domain,Crawl Type,Volume/Crawl,Crawls/day,Days,Zipcode,CPM ({_csv_cur}),Cost/Crawl ({_csv_cur}),{_period_label} Cost ({_csv_cur})"
-    csv_lines = [_csv_hdr]
-    for r in results:
-        _pf   = _period_factor(r["days"])
-        _cpc  = r["cost_per_crawl"] * _fx
-        _tot  = r["total_cost"] * _fx * _pf
-        _cpm_v = (r["cost_per_crawl"] / r["volume_per_crawl"] * 1000 * _fx) if r["volume_per_crawl"] else 0
-        csv_lines.append(
-            f'{r["display"]},{r["domain"]},{r["crawl_type"]},'
-            f'{r["volume_per_crawl"]},{r["freq"]},{r["days"]},{r["zip_mode"]},'
-            f'{_cpm_v:.6f},{_cpc:.6f},{_tot:.6f}'
-        )
-    _gt_csv = sum((r["total_cost"] + r.get("screenshot_total", 0)) * _fx * _period_factor(r["days"]) for r in results)
-    csv_lines += ["", f'Grand Total,,,,,,,,,{_gt_csv:.6f}']
+    if "_cc_csv_cache" not in st.session_state:
+        _csv_cur  = _cur_label
+        _csv_hdr  = f"Platform,Domain,Crawl Type,Volume/Crawl,Crawls/day,Days,Zipcode,CPM ({_csv_cur}),Cost/Crawl ({_csv_cur}),{_period_label} Cost ({_csv_cur})"
+        _csv_lines = [_csv_hdr]
+        for r in results:
+            _pf_r   = _period_factor(r["days"])
+            _cpc_r  = r["cost_per_crawl"] * _fx
+            _tot_r  = r["total_cost"] * _fx * _pf_r
+            _cpm_r  = (r["cost_per_crawl"] / r["volume_per_crawl"] * 1000 * _fx) if r["volume_per_crawl"] else 0
+            _csv_lines.append(
+                f'{r["display"]},{r["domain"]},{r["crawl_type"]},'
+                f'{r["volume_per_crawl"]},{r["freq"]},{r["days"]},{r["zip_mode"]},'
+                f'{_cpm_r:.6f},{_cpc_r:.6f},{_tot_r:.6f}'
+            )
+        _gt_csv = sum((r["total_cost"] + r.get("screenshot_total", 0)) * _fx * _period_factor(r["days"]) for r in results)
+        _csv_lines += ["", f'Grand Total,,,,,,,,,{_gt_csv:.6f}']
+        st.session_state["_cc_csv_cache"] = "\n".join(_csv_lines).encode()
     with dl2:
         if st.download_button(
             "⬇️  Download CSV",
-            data="\n".join(csv_lines).encode(),
+            data=st.session_state["_cc_csv_cache"],
             file_name=f"cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             width="stretch",

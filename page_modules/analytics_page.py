@@ -23,6 +23,11 @@ def render_analytics():
     with ctrl2:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("🔄  Refresh", width="stretch"):
+            load_events.clear()
+            get_summary.clear()
+            for _k in list(st.session_state.keys()):
+                if isinstance(_k, str) and _k.startswith("_anl_csv_"):
+                    del st.session_state[_k]
             st.rerun()
     days = period_options[period_label]
     summary = get_summary(days)
@@ -174,23 +179,27 @@ def render_analytics():
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
         _dl1, _dl2 = st.columns([1, 1])
+        _csv_key = f"_anl_csv_{period_label}"
+        if _csv_key not in st.session_state:
+            st.session_state[_csv_key] = pd.DataFrame(rows).to_csv(index=False).encode()
         with _dl1:
-            _filtered_csv = pd.DataFrame(rows).to_csv(index=False).encode()
             st.download_button(
                 "⬇️  Export Activity Table (CSV)",
-                data=_filtered_csv,
-                file_name=f"analytics_{period_label.replace(' ','_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                data=st.session_state[_csv_key],
+                file_name=f"analytics_{period_label.replace(' ','_')}.csv",
                 mime="text/csv",
                 key="analytics_dl_filtered",
             )
         with _dl2:
-            raw_events = load_events(days)
-            if raw_events:
-                csv_data = pd.DataFrame(raw_events).to_csv(index=False).encode()
+            _raw_key = f"_anl_raw_{period_label}"
+            if _raw_key not in st.session_state:
+                raw_events = load_events(days)
+                st.session_state[_raw_key] = pd.DataFrame(raw_events).to_csv(index=False).encode() if raw_events else b""
+            if st.session_state[_raw_key]:
                 st.download_button(
                     "⬇️  Export Full Raw Log (CSV)",
-                    data=csv_data,
-                    file_name=f"analytics_raw_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    data=st.session_state[_raw_key],
+                    file_name=f"analytics_raw_{period_label.replace(' ','_')}.csv",
                     mime="text/csv",
                     key="analytics_dl_raw",
                 )

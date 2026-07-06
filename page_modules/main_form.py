@@ -398,7 +398,7 @@ def render_summary(data):
         filled = {k: v for k, v in content.items() if v not in ["", None, [], {}]}
         if not filled:
             continue
-        with st.expander(f"**{section}**", expanded=True):
+        with st.expander(f"**{section}**", expanded=len(filled) <= 3):
             for k, v in filled.items():
                 info_row(k, v)
 
@@ -564,9 +564,22 @@ def render_main_form():
                     st.session_state["_form_touched"] = False
                     st.rerun()
             with tc2:
-                if st.button("🗑️  Delete Template", key="_tpl_del_btn"):
-                    _delete_form_template(_tpl_choice)
-                    st.rerun()
+                if st.session_state.get("_confirm_del_tpl") == _tpl_choice:
+                    st.warning(f"Delete **{_tpl_choice}**?")
+                    _cd1, _cd2 = st.columns(2)
+                    with _cd1:
+                        if st.button("Yes, delete", key="_tpl_del_confirm", type="primary"):
+                            _delete_form_template(_tpl_choice)
+                            st.session_state.pop("_confirm_del_tpl", None)
+                            st.rerun()
+                    with _cd2:
+                        if st.button("Cancel", key="_tpl_del_cancel"):
+                            st.session_state.pop("_confirm_del_tpl", None)
+                            st.rerun()
+                else:
+                    if st.button("🗑️  Delete Template", key="_tpl_del_btn"):
+                        st.session_state["_confirm_del_tpl"] = _tpl_choice
+                        st.rerun()
 
     left, right = st.columns([2, 1], gap="large")
     form_data = {}

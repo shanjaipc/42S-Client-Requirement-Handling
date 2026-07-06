@@ -1,6 +1,7 @@
 import streamlit as st  # type: ignore
 import pandas as pd  # type: ignore
 import html as _html_mod
+import re as _re
 from datetime import date, datetime
 from io import BytesIO
 
@@ -616,7 +617,6 @@ def render_monthly_review():
             "next_focus": st.session_state.get("mr_next_focus", ""),
         }
 
-        import re as _re
         _safe = lambda s: _re.sub(r"[^\w-]+", "_", s.strip()) or "Review"
         fname = f"Monthly_Review_{_safe(client_val)}_{_safe(period_val)}.pdf"
 
